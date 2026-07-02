@@ -1,0 +1,227 @@
+{
+  "income": 5115,
+  "budgetsByMonth": {
+    "2026-07": {
+      "Housing/Rent": 1100,
+      "Utilities": 500,
+      "Groceries": 100,
+      "Transportation": 50,
+      "Insurance - MedBank": 250,
+      "Family Expenses": 578.125,
+      "Debt/Loan Payments": 781.25,
+      "Chit": 156.25,
+      "Dining Out": 100,
+      "Entertainment": 100,
+      "Subscriptions": 18.229166666666668,
+      "Health/Medical": 200,
+      "Personal Care": 0,
+      "Stocks": 156.25,
+      "Savings/Investments": 1000,
+      "Miscellaneous": 0
+    },
+    "2026-08": {
+      "Housing/Rent": 1100,
+      "Utilities": 500,
+      "Groceries": 100,
+      "Transportation": 50,
+      "Insurance - MedBank": 250,
+      "Family Expenses": 578.125,
+      "Debt/Loan Payments": 781.25,
+      "Chit": 156.25,
+      "Dining Out": 100,
+      "Entertainment": 100,
+      "Subscriptions": 18.229166666666668,
+      "Health/Medical": 200,
+      "Personal Care": 0,
+      "Stocks": 156.25,
+      "Savings/Investments": 1000,
+      "Miscellaneous": 0
+    },
+    "2026-09": {
+      "Housing/Rent": 1100,
+      "Utilities": 500,
+      "Groceries": 100,
+      "Transportation": 50,
+      "Insurance - MedBank": 250,
+      "Family Expenses": 578.125,
+      "Debt/Loan Payments": 781.25,
+      "Chit": 156.25,
+      "Dining Out": 100,
+      "Entertainment": 100,
+      "Subscriptions": 18.229166666666668,
+      "Health/Medical": 200,
+      "Personal Care": 0,
+      "Stocks": 156.25,
+      "Savings/Investments": 1000,
+      "Miscellaneous": 0
+    },
+    "2026-10": {
+      "Housing/Rent": 1100,
+      "Utilities": 500,
+      "Groceries": 100,
+      "Transportation": 50,
+      "Insurance - MedBank": 250,
+      "Family Expenses": 578.125,
+      "Debt/Loan Payments": 781.25,
+      "Chit": 156.25,
+      "Dining Out": 100,
+      "Entertainment": 100,
+      "Subscriptions": 18.229166666666668,
+      "Health/Medical": 200,
+      "Personal Care": 0,
+      "Stocks": 156.25,
+      "Savings/Investments": 1000,
+      "Miscellaneous": 0
+    },
+    "2026-11": {
+      "Housing/Rent": 1100,
+      "Utilities": 500,
+      "Groceries": 100,
+      "Transportation": 50,
+      "Insurance - MedBank": 250,
+      "Family Expenses": 578.125,
+      "Debt/Loan Payments": 781.25,
+      "Chit": 156.25,
+      "Dining Out": 100,
+      "Entertainment": 100,
+      "Subscriptions": 18.229166666666668,
+      "Health/Medical": 200,
+      "Personal Care": 0,
+      "Stocks": 156.25,
+      "Savings/Investments": 1000,
+      "Miscellaneous": 0
+    },
+    "2026-12": {
+      "Housing/Rent": 1100,
+      "Utilities": 500,
+      "Groceries": 100,
+      "Transportation": 50,
+      "Insurance - MedBank": 250,
+      "Family Expenses": 578.125,
+      "Debt/Loan Payments": 781.25,
+      "Chit": 156.25,
+      "Dining Out": 100,
+      "Entertainment": 100,
+      "Subscriptions": 18.229166666666668,
+      "Health/Medical": 200,
+      "Personal Care": 0,
+      "Stocks": 156.25,
+      "Savings/Investments": 1000,
+      "Miscellaneous": 0
+    }
+  },
+  "transactions": [
+    {
+      "id": "1bluc9x719f21dda04e",
+      "date": "2026-07-01",
+      "category": "Housing/Rent",
+      "note": "July rent",
+      "amount": 1500
+    },
+    {
+      "id": "2n3whgk319f21dda04e",
+      "date": "2026-07-01",
+      "category": "Groceries",
+      "note": "Grocery shopping",
+      "amount": 100
+    },
+    {
+      "id": "prac7das19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Dining Out",
+      "note": "Dinner out",
+      "amount": 100
+    },
+    {
+      "id": "9kd7vgeg19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Utilities",
+      "note": "Electric bill",
+      "amount": 144
+    },
+    {
+      "id": "07i56qix19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Utilities",
+      "note": "Internet",
+      "amount": 47.5
+    },
+    {
+      "id": "rfozzos019f21dda04e",
+      "date": "2026-07-01",
+      "category": "Subscriptions",
+      "note": "NetFlix & One Drive",
+      "amount": 15
+    },
+    {
+      "id": "s346kirs19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Subscriptions",
+      "note": "Gmail account",
+      "amount": 30
+    },
+    {
+      "id": "jrvmd4vb19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Family Expenses",
+      "note": "TVM & PTM",
+      "amount": 570
+    },
+    {
+      "id": "itc7yi3a19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Debt/Loan Payments",
+      "note": "Loans",
+      "amount": 770
+    },
+    {
+      "id": "9iu1ucbf19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Stocks",
+      "note": "Stocks",
+      "amount": 156.25
+    },
+    {
+      "id": "y7u7r44y19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Chit",
+      "note": "Chit",
+      "amount": 156.25
+    },
+    {
+      "id": "9onhr68a19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Dining Out",
+      "note": "Salary Party",
+      "amount": 162.24
+    },
+    {
+      "id": "u8vsnkvo19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Dining Out",
+      "note": "Ubet Eats",
+      "amount": 33.14
+    },
+    {
+      "id": "qzsw3hfm19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Entertainment",
+      "note": "Lotto tiket",
+      "amount": 24
+    },
+    {
+      "id": "p4botxgq19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Miscellaneous",
+      "note": "Dad Lebara recharge",
+      "amount": 25
+    },
+    {
+      "id": "64k8kowd19f21dda04e",
+      "date": "2026-07-01",
+      "category": "Health/Medical",
+      "note": "Dad Bupa",
+      "amount": 200
+    }
+  ]
+}

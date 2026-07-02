@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0F172A" />
+<title>Expense Planner</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="topbar-title">Expense Planner</div>
+    <select id="monthSelect" class="month-select"></select>
+  </header>
+
+  <main id="main">
+
+    <section id="view-dashboard" class="view active">
+      <div class="kpi-row">
+        <div class="kpi-card tint-blue">
+          <div class="kpi-label">Budgeted</div>
+          <div class="kpi-value" id="kpiBudgeted">$0</div>
+        </div>
+        <div class="kpi-card tint-amber">
+          <div class="kpi-label">Spent</div>
+          <div class="kpi-value" id="kpiActual">$0</div>
+        </div>
+        <div class="kpi-card tint-teal">
+          <div class="kpi-label">Remaining</div>
+          <div class="kpi-value" id="kpiRemaining">$0</div>
+        </div>
+      </div>
+
+      <div class="watch-banner" id="watchBanner">All categories on track</div>
+
+      <h2 class="section-title" style="--accent-color:var(--blue-accent)">By Category</h2>
+      <div id="categoryList" class="category-list"></div>
+    </section>
+
+    <section id="view-transactions" class="view">
+      <h2 class="section-title" style="--accent-color:var(--amber-accent)">Transactions</h2>
+      <div id="txList" class="tx-list"></div>
+    </section>
+
+    <section id="view-budget" class="view">
+      <h2 class="section-title" style="--accent-color:var(--teal-accent)">Monthly Income</h2>
+      <div class="settings-row">
+        <label for="incomeInput">Income</label>
+        <input type="number" id="incomeInput" inputmode="decimal" placeholder="0" />
+      </div>
+
+      <h2 class="section-title" style="--accent-color:var(--indigo-accent)">Categories</h2>
+      <div id="categoryManageList" class="category-manage-list"></div>
+      <div class="add-category-row">
+        <input type="text" id="newCategoryInput" placeholder="New category name" />
+        <button type="button" id="addCategoryBtn" class="btn btn-indigo">Add</button>
+      </div>
+
+      <div class="section-title-row">
+        <h2 class="section-title" style="--accent-color:var(--indigo-accent)">Category Budgets</h2>
+        <button type="button" id="copyNextBtn" class="link-btn">Copy to next month →</button>
+      </div>
+      <div id="budgetList" class="budget-list"></div>
+
+      <h2 class="section-title" style="--accent-color:var(--green-accent)">Backup &amp; Export</h2>
+      <div class="export-row">
+        <button type="button" id="exportCsvBtn" class="btn btn-teal">Export CSV</button>
+        <button type="button" id="exportJsonBtn" class="btn btn-indigo">Export Backup (JSON)</button>
+      </div>
+      <button type="button" id="importJsonBtn" class="btn btn-amber import-btn">Import Backup (JSON)</button>
+      <input type="file" id="importFileInput" accept="application/json,.json" style="display:none" />
+      <p class="hint-text">CSV opens in Excel/Sheets like your Transactions log. The JSON backup can be re-imported later and is the safest way to keep your data if you clear your browser or switch phones. Importing replaces all current data on this device.</p>
+    </section>
+
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-view="dashboard">
+      <span class="nav-icon">&#9679;</span><span>Home</span>
+    </button>
+    <button class="nav-btn" data-view="transactions">
+      <span class="nav-icon">&#9776;</span><span>Log</span>
+    </button>
+    <button class="fab" id="addBtn">+</button>
+    <button class="nav-btn" data-view="budget">
+      <span class="nav-icon">&#9881;</span><span>Budget</span>
+    </button>
+    <button class="nav-btn" id="resetBtn" data-action="reset">
+      <span class="nav-icon">&#8635;</span><span>Clear Data</span>
+    </button>
+  </nav>
+
+  <div id="sheetOverlay" class="sheet-overlay"></div>
+  <div id="addSheet" class="add-sheet">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">Add Expense</h2>
+    <form id="addForm">
+      <label class="field-label">Amount</label>
+      <input type="number" id="amountInput" inputmode="decimal" step="0.01" placeholder="0.00" required />
+
+      <label class="field-label">Category</label>
+      <div id="categoryChips" class="category-chips"></div>
+
+      <label class="field-label">Date</label>
+      <input type="date" id="dateInput" required />
+
+      <label class="field-label">Note (optional)</label>
+      <input type="text" id="noteInput" placeholder="e.g. Weekly grocery run" />
+
+      <div class="sheet-actions">
+        <button type="button" id="cancelBtn" class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Expense</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+<script src="app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
