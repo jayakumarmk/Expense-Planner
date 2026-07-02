@@ -239,12 +239,21 @@ function renderTransactions() {
         <span class="tx-meta">${t.date}${t.note ? " · " + escapeHtml(t.note) : ""}</span>
       </div>
       <span class="tx-amount">${fmt(Number(t.amount))}</span>
+      <button class="tx-edit" data-id="${t.id}">&#9998;</button>
       <button class="tx-delete" data-id="${t.id}">&times;</button>
     </div>
   `).join("");
 
+  el.querySelectorAll(".tx-edit").forEach((btn) => {
+    btn.onclick = () => {
+      const t = state.transactions.find((tx) => tx.id === btn.dataset.id);
+      if (t) openSheet(t);
+    };
+  });
+
   el.querySelectorAll(".tx-delete").forEach((btn) => {
     btn.onclick = () => {
+      if (!confirm("Delete this transaction? This can't be undone.")) return;
       state.transactions = state.transactions.filter((t) => t.id !== btn.dataset.id);
       saveData();
       render();
@@ -414,13 +423,17 @@ function switchView(view) {
 // ---- add expense sheet ----
 const overlay = document.getElementById("sheetOverlay");
 const sheet = document.getElementById("addSheet");
+let editingId = null;
 
-function openSheet() {
-  document.getElementById("dateInput").value = todayStr();
-  selectedChip = state.categories[0];
+function openSheet(tx) {
+  editingId = tx ? tx.id : null;
+  document.getElementById("sheetTitle").textContent = tx ? "Edit Expense" : "Add Expense";
+  document.getElementById("saveBtnLabel").textContent = tx ? "Save Changes" : "Save Expense";
+  document.getElementById("dateInput").value = tx ? tx.date : todayStr();
+  selectedChip = tx ? tx.category : state.categories[0];
   renderChips();
-  document.getElementById("amountInput").value = "";
-  document.getElementById("noteInput").value = "";
+  document.getElementById("amountInput").value = tx ? round2(tx.amount) : "";
+  document.getElementById("noteInput").value = tx ? tx.note || "" : "";
   overlay.classList.add("show");
   sheet.classList.add("show");
 }
@@ -428,6 +441,7 @@ function openSheet() {
 function closeSheet() {
   overlay.classList.remove("show");
   sheet.classList.remove("show");
+  editingId = null;
 }
 
 function renderChips() {
@@ -443,7 +457,7 @@ function renderChips() {
   });
 }
 
-document.getElementById("addBtn").addEventListener("click", openSheet);
+document.getElementById("addBtn").addEventListener("click", () => openSheet());
 document.getElementById("cancelBtn").addEventListener("click", closeSheet);
 overlay.addEventListener("click", closeSheet);
 
@@ -453,7 +467,17 @@ document.getElementById("addForm").addEventListener("submit", (e) => {
   const date = document.getElementById("dateInput").value;
   const note = document.getElementById("noteInput").value.trim();
   if (!amount || !date) return;
-  state.transactions.push({ id: cryptoId(), date, category: selectedChip, note, amount });
+  if (editingId) {
+    const t = state.transactions.find((tx) => tx.id === editingId);
+    if (t) {
+      t.date = date;
+      t.category = selectedChip;
+      t.note = note;
+      t.amount = amount;
+    }
+  } else {
+    state.transactions.push({ id: cryptoId(), date, category: selectedChip, note, amount });
+  }
   saveData();
   closeSheet();
   currentMonth = monthKey(date);

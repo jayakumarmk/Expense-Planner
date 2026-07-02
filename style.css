@@ -225,6 +225,15 @@ body {
 .tx-meta { font-size: 12px; color: var(--slate-text); }
 .tx-amount { font-weight: 700; font-size: 15px; white-space: nowrap; margin-left: 10px; }
 
+.tx-edit {
+  background: none;
+  border: none;
+  color: var(--blue-accent);
+  font-size: 15px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
 .tx-delete {
   background: none;
   border: none;

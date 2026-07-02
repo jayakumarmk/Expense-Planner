@@ -97,7 +97,7 @@
   <div id="sheetOverlay" class="sheet-overlay"></div>
   <div id="addSheet" class="add-sheet">
     <div class="sheet-handle"></div>
-    <h2 class="sheet-title">Add Expense</h2>
+    <h2 class="sheet-title" id="sheetTitle">Add Expense</h2>
     <form id="addForm">
       <label class="field-label">Amount</label>
       <input type="number" id="amountInput" inputmode="decimal" step="0.01" placeholder="0.00" required />
@@ -113,7 +113,7 @@
 
       <div class="sheet-actions">
         <button type="button" id="cancelBtn" class="btn btn-ghost">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Expense</button>
+        <button type="submit" class="btn btn-primary" id="saveBtnLabel">Save Expense</button>
       </div>
     </form>
   </div>
