@@ -117,6 +117,27 @@ body {
 .watch-banner.warn { background: var(--amber-tint); color: #92400E; }
 .watch-banner.danger { background: var(--red-tint); color: #991B1B; }
 
+.bill-due-item {
+  background: var(--red-tint);
+  border: 1px solid #FCA5A5;
+  border-left: 4px solid var(--red-accent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.bill-due-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.bill-due-info { display: flex; flex-direction: column; }
+.bill-due-category { font-weight: 700; font-size: 14px; color: var(--navy); }
+.bill-due-meta { font-size: 12px; color: #991B1B; }
+.bill-due-amount { font-weight: 700; font-size: 15px; color: var(--navy); }
+.bill-due-actions { display: flex; gap: 8px; }
+.bill-due-actions .btn { padding: 8px; font-size: 13px; }
+
 .country-breakdown {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -175,6 +196,42 @@ body {
   border-radius: 12px;
   padding: 14px 10px 6px;
   margin-bottom: 18px;
+}
+
+.yearly-summary {
+  background: white;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--indigo-accent);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 18px;
+}
+.yearly-stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 14px;
+}
+.yearly-stat-row + .yearly-stat-row { border-top: 1px solid var(--border); }
+.yearly-stat-label { color: var(--slate-text); font-weight: 600; }
+.yearly-stat-value { font-weight: 700; color: var(--navy); }
+.yearly-top-categories {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.yearly-top-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--slate-text); margin-bottom: 6px; }
+.yearly-cat-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+
+.tx-search {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  margin-bottom: 12px;
+  background: white;
 }
 
 .section-title {
@@ -460,6 +517,32 @@ body {
   padding: 2px 6px;
   cursor: pointer;
   margin-left: 8px;
+}
+
+.add-planned-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.add-planned-grid select,
+.add-planned-grid input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+  width: 100%;
+}
+.add-planned-btn { width: 100%; margin-bottom: 10px; }
+
+.recurring-check.sub-check {
+  margin-top: 10px;
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--slate-text);
 }
 
 .bottom-nav {

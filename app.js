@@ -122,6 +122,8 @@ function blankData() {
     budgetsByMonth: { [thisMonth]: zeroBudgets(DEFAULT_CATEGORIES) },
     transactions: [],
     recurringTemplates: [],
+    plannedExpenses: [],
+    skippedRecurring: {},
   };
 }
 
@@ -133,6 +135,7 @@ let state = loadData();
 let currentMonth = null;
 let currentView = "dashboard";
 let selectedChip = state.categories[0];
+let txSearchQuery = "";
 
 function loadData() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -151,6 +154,8 @@ function loadData() {
     if (!parsed.categoryCountry || typeof parsed.categoryCountry !== "object") parsed.categoryCountry = {};
     if (!parsed.displayCurrency) parsed.displayCurrency = "AUD";
     if (!parsed.exchangeRatesByMonth || typeof parsed.exchangeRatesByMonth !== "object") parsed.exchangeRatesByMonth = {};
+    if (!Array.isArray(parsed.plannedExpenses)) parsed.plannedExpenses = [];
+    if (!parsed.skippedRecurring || typeof parsed.skippedRecurring !== "object") parsed.skippedRecurring = {};
     return parsed;
   } catch {
     const blank = blankData();
@@ -244,6 +249,7 @@ function renderCountryBreakdown() {
 function ensureRecurringForMonth(month) {
   let changed = false;
   (state.recurringTemplates || []).forEach((tpl) => {
+    if (tpl.confirmBeforeLogging) return; // handled via the Bills Due confirmation flow instead
     const exists = state.transactions.some((t) => t.recurringId === tpl.id && monthKey(t.date) === month);
     if (!exists) {
       const [y, m] = month.split("-").map(Number);
@@ -269,13 +275,94 @@ function render() {
   ensureRecurringForMonth(currentMonth);
   renderDashboard();
   renderCountryBreakdown();
+  renderBillsDue();
+  renderYearlySummary();
   renderTransactions();
   renderBudgetSettings();
   renderCurrencySettings();
   renderCategoryManager();
   renderRecurringList();
+  renderPlannedList();
   renderSavingsGoal();
   renderTrendChart();
+}
+
+// Pending items awaiting your confirmation: recurring templates marked
+// "confirm before logging", and one-off planned expenses whose due date
+// has arrived. Only shown while viewing the real current month.
+function getPendingBills() {
+  const today = todayStr();
+  const thisMonth = monthKey(today);
+  if (currentMonth !== thisMonth) return [];
+  const pending = [];
+  (state.recurringTemplates || []).forEach((tpl) => {
+    if (!tpl.confirmBeforeLogging) return;
+    const skipKey = `${tpl.id}:${thisMonth}`;
+    if (state.skippedRecurring[skipKey]) return;
+    const exists = state.transactions.some((t) => t.recurringId === tpl.id && monthKey(t.date) === thisMonth);
+    if (!exists) {
+      pending.push({
+        type: "recurring", id: tpl.id, category: tpl.category, note: tpl.note, amount: tpl.amount,
+        label: `Recurring · around day ${tpl.day}`,
+      });
+    }
+  });
+  (state.plannedExpenses || []).forEach((p) => {
+    if (p.dueDate <= today) {
+      pending.push({
+        type: "planned", id: p.id, category: p.category, note: p.note, amount: p.amount,
+        label: `Planned · due ${p.dueDate}`,
+      });
+    }
+  });
+  return pending;
+}
+
+function renderBillsDue() {
+  const el = document.getElementById("billsDueSection");
+  const pending = getPendingBills();
+  if (pending.length === 0) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = pending.map((p, i) => `
+    <div class="bill-due-item">
+      <div class="bill-due-top">
+        <div class="bill-due-info">
+          <span class="bill-due-category">${escapeHtml(p.category)}${p.note ? " — " + escapeHtml(p.note) : ""}</span>
+          <span class="bill-due-meta">${p.label}</span>
+        </div>
+        <span class="bill-due-amount">${fmt(Number(p.amount), getCategoryCurrency(p.category))}</span>
+      </div>
+      <div class="bill-due-actions">
+        <button type="button" class="btn btn-teal" data-log-bill="${i}">✓ Log it</button>
+        ${p.type === "recurring" ? `<button type="button" class="btn btn-ghost" data-skip-bill="${i}">Skip this month</button>` : ""}
+      </div>
+    </div>
+  `).join("");
+
+  el.querySelectorAll("[data-log-bill]").forEach((btn) => {
+    btn.onclick = () => {
+      const p = pending[Number(btn.dataset.logBill)];
+      state.transactions.push({
+        id: cryptoId(), date: todayStr(), category: p.category, note: p.note, amount: Number(p.amount),
+        ...(p.type === "recurring" ? { recurringId: p.id } : {}),
+      });
+      if (p.type === "planned") {
+        state.plannedExpenses = state.plannedExpenses.filter((x) => x.id !== p.id);
+      }
+      saveData();
+      render();
+    };
+  });
+  el.querySelectorAll("[data-skip-bill]").forEach((btn) => {
+    btn.onclick = () => {
+      const p = pending[Number(btn.dataset.skipBill)];
+      state.skippedRecurring[`${p.id}:${monthKey(todayStr())}`] = true;
+      saveData();
+      render();
+    };
+  });
 }
 
 function renderDashboard() {
@@ -335,11 +422,15 @@ function renderDashboard() {
 function renderTransactions() {
   const list = state.transactions
     .filter((t) => monthKey(t.date) === currentMonth)
+    .filter((t) => {
+      if (!txSearchQuery) return true;
+      return t.category.toLowerCase().includes(txSearchQuery) || (t.note || "").toLowerCase().includes(txSearchQuery);
+    })
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const el = document.getElementById("txList");
   if (list.length === 0) {
-    el.innerHTML = `<div class="empty-state">No transactions logged for ${monthLabel(currentMonth)} yet.</div>`;
+    el.innerHTML = `<div class="empty-state">${txSearchQuery ? "No transactions match your search." : `No transactions logged for ${monthLabel(currentMonth)} yet.`}</div>`;
     return;
   }
   el.innerHTML = list.map((t) => `
@@ -526,6 +617,56 @@ function renderTrendChart() {
     `<svg viewBox="0 0 ${totalW} ${h}" width="100%" height="140" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
 }
 
+function renderYearlySummary() {
+  const year = (currentMonth || monthKey(todayStr())).slice(0, 4);
+  const displayCur = state.displayCurrency || "AUD";
+  const monthsInYear = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+
+  let yearActualAUD = 0;
+  let yearBudgetedAUD = 0;
+  let monthsWithData = 0;
+  const catTotalsAUD = {};
+
+  monthsInYear.forEach((m) => {
+    const totals = categoryTotalsForMonth(m);
+    const hasTx = state.transactions.some((t) => monthKey(t.date) === m);
+    if (hasTx) monthsWithData++;
+    state.categories.forEach((c) => {
+      const aud = toAUD(totals[c] || 0, getCategoryCurrency(c), m);
+      yearActualAUD += aud;
+      catTotalsAUD[c] = (catTotalsAUD[c] || 0) + aud;
+    });
+    if (state.budgetsByMonth[m]) {
+      state.categories.forEach((c) => {
+        yearBudgetedAUD += toAUD(state.budgetsByMonth[m][c] || 0, getCategoryCurrency(c), m);
+      });
+    }
+  });
+
+  const yearActual = fromAUD(yearActualAUD, displayCur, currentMonth);
+  const yearBudgeted = fromAUD(yearBudgetedAUD, displayCur, currentMonth);
+  const avgMonthly = fromAUD(monthsWithData ? yearActualAUD / monthsWithData : 0, displayCur, currentMonth);
+
+  const topCats = Object.entries(catTotalsAUD)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  document.getElementById("yearlySummary").innerHTML = `
+    <div class="yearly-stat-row"><span class="yearly-stat-label">Total spent in ${year}</span><span class="yearly-stat-value">${fmt(yearActual, displayCur)}</span></div>
+    <div class="yearly-stat-row"><span class="yearly-stat-label">Total budgeted in ${year}</span><span class="yearly-stat-value">${fmt(yearBudgeted, displayCur)}</span></div>
+    <div class="yearly-stat-row"><span class="yearly-stat-label">Average per month</span><span class="yearly-stat-value">${fmt(avgMonthly, displayCur)}</span></div>
+    ${topCats.length ? `
+      <div class="yearly-top-categories">
+        <div class="yearly-top-title">Top categories this year</div>
+        ${topCats.map(([c, v]) => `
+          <div class="yearly-cat-row"><span>${escapeHtml(c)}</span><span>${fmt(fromAUD(v, displayCur, currentMonth), displayCur)}</span></div>
+        `).join("")}
+      </div>
+    ` : ""}
+  `;
+}
+
 function renderRecurringList() {
   const list = state.recurringTemplates || [];
   const el = document.getElementById("recurringList");
@@ -537,7 +678,7 @@ function renderRecurringList() {
     <div class="recurring-item" style="--cat-color:${categoryColor(tpl.category)}">
       <div class="recurring-info">
         <span class="recurring-category">${tpl.category}</span>
-        <span class="recurring-meta">${tpl.note ? escapeHtml(tpl.note) + " · " : ""}Every month on day ${tpl.day}</span>
+        <span class="recurring-meta">${tpl.note ? escapeHtml(tpl.note) + " · " : ""}Every month on day ${tpl.day}${tpl.confirmBeforeLogging ? " · asks to confirm" : ""}</span>
       </div>
       <span class="recurring-amount">${fmt(Number(tpl.amount), getCategoryCurrency(tpl.category))}</span>
       <button class="recurring-stop" data-id="${tpl.id}">&times;</button>
@@ -548,6 +689,39 @@ function renderRecurringList() {
     btn.onclick = () => {
       if (!confirm("Stop this recurring transaction? Past and current entries will stay, but no new ones will be created.")) return;
       state.recurringTemplates = state.recurringTemplates.filter((t) => t.id !== btn.dataset.id);
+      saveData();
+      render();
+    };
+  });
+}
+
+function renderPlannedList() {
+  const catSelect = document.getElementById("plannedCategorySelect");
+  const prevValue = catSelect.value;
+  catSelect.innerHTML = state.categories.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  if (state.categories.includes(prevValue)) catSelect.value = prevValue;
+
+  const list = state.plannedExpenses || [];
+  const el = document.getElementById("plannedList");
+  if (list.length === 0) {
+    el.innerHTML = `<div class="empty-state">No planned expenses yet. Add a one-time bill with a due date below.</div>`;
+    return;
+  }
+  el.innerHTML = list.map((p) => `
+    <div class="recurring-item" style="--cat-color:${categoryColor(p.category)}">
+      <div class="recurring-info">
+        <span class="recurring-category">${escapeHtml(p.category)}</span>
+        <span class="recurring-meta">${p.note ? escapeHtml(p.note) + " · " : ""}Due ${p.dueDate}</span>
+      </div>
+      <span class="recurring-amount">${fmt(Number(p.amount), getCategoryCurrency(p.category))}</span>
+      <button class="recurring-stop" data-planned-id="${p.id}">&times;</button>
+    </div>
+  `).join("");
+
+  el.querySelectorAll("[data-planned-id]").forEach((btn) => {
+    btn.onclick = () => {
+      if (!confirm("Remove this planned expense?")) return;
+      state.plannedExpenses = state.plannedExpenses.filter((p) => p.id !== btn.dataset.plannedId);
       saveData();
       render();
     };
@@ -653,6 +827,8 @@ function importJSON(file) {
       budgetsByMonth: parsed.budgetsByMonth,
       transactions: parsed.transactions,
       recurringTemplates: Array.isArray(parsed.recurringTemplates) ? parsed.recurringTemplates : [],
+      plannedExpenses: Array.isArray(parsed.plannedExpenses) ? parsed.plannedExpenses : [],
+      skippedRecurring: parsed.skippedRecurring && typeof parsed.skippedRecurring === "object" ? parsed.skippedRecurring : {},
     };
     saveData();
     currentMonth = null;
@@ -689,6 +865,8 @@ function openSheet(tx) {
   document.getElementById("amountInput").value = tx ? round2(tx.amount) : "";
   document.getElementById("noteInput").value = tx ? tx.note || "" : "";
   document.getElementById("recurringInput").checked = false;
+  document.getElementById("confirmRecurringInput").checked = false;
+  document.getElementById("confirmCheckRow").style.display = "none";
   document.querySelector(".recurring-check").style.display = tx ? "none" : "flex";
   overlay.classList.add("show");
   sheet.classList.add("show");
@@ -718,13 +896,32 @@ document.getElementById("addBtn").addEventListener("click", () => openSheet());
 document.getElementById("cancelBtn").addEventListener("click", closeSheet);
 overlay.addEventListener("click", closeSheet);
 
+document.getElementById("recurringInput").addEventListener("change", (e) => {
+  document.getElementById("confirmCheckRow").style.display = e.target.checked ? "flex" : "none";
+  if (!e.target.checked) document.getElementById("confirmRecurringInput").checked = false;
+});
+
 document.getElementById("addForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const amount = Number(document.getElementById("amountInput").value);
   const date = document.getElementById("dateInput").value;
   const note = document.getElementById("noteInput").value.trim();
   const makeRecurring = document.getElementById("recurringInput").checked;
+  const confirmEachMonth = document.getElementById("confirmRecurringInput").checked;
   if (!amount || !date) return;
+
+  if (!editingId) {
+    const isDuplicate = state.transactions.some(
+      (t) => t.category === selectedChip && t.date === date && Math.abs(Number(t.amount) - amount) < 0.005
+    );
+    if (isDuplicate) {
+      const proceed = confirm(
+        `A very similar transaction already exists: ${selectedChip} ${fmt(amount, getCategoryCurrency(selectedChip))} on ${date}.\n\nAdd it anyway?`
+      );
+      if (!proceed) return;
+    }
+  }
+
   if (editingId) {
     const t = state.transactions.find((tx) => tx.id === editingId);
     if (t) {
@@ -743,6 +940,7 @@ document.getElementById("addForm").addEventListener("submit", (e) => {
         note,
         amount,
         day: Number(date.split("-")[2]),
+        confirmBeforeLogging: confirmEachMonth,
       });
       newTx.recurringId = tplId;
     }
@@ -807,6 +1005,28 @@ document.getElementById("addCategoryBtn").addEventListener("click", () => {
   input.value = "";
   saveData();
   render();
+});
+
+document.getElementById("addPlannedBtn").addEventListener("click", () => {
+  const category = document.getElementById("plannedCategorySelect").value;
+  const amount = Number(document.getElementById("plannedAmountInput").value);
+  const note = document.getElementById("plannedNoteInput").value.trim();
+  const dueDate = document.getElementById("plannedDueDateInput").value;
+  if (!category || !amount || !dueDate) {
+    alert("Please choose a category, amount, and due date.");
+    return;
+  }
+  state.plannedExpenses.push({ id: cryptoId(), category, note, amount, dueDate });
+  document.getElementById("plannedAmountInput").value = "";
+  document.getElementById("plannedNoteInput").value = "";
+  document.getElementById("plannedDueDateInput").value = "";
+  saveData();
+  render();
+});
+
+document.getElementById("txSearchInput").addEventListener("input", (e) => {
+  txSearchQuery = e.target.value.trim().toLowerCase();
+  renderTransactions();
 });
 
 render();

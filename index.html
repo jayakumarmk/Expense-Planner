@@ -37,6 +37,8 @@
 
       <div class="watch-banner" id="watchBanner">All categories on track</div>
 
+      <div id="billsDueSection"></div>
+
       <h2 class="section-title" style="--accent-color:var(--teal-accent)">Australia / India Breakdown</h2>
       <div id="countryBreakdown" class="country-breakdown"></div>
 
@@ -59,10 +61,14 @@
 
       <h2 class="section-title" style="--accent-color:var(--amber-accent)">Spending Trend</h2>
       <div id="trendChart" class="trend-chart"></div>
+
+      <h2 class="section-title" style="--accent-color:var(--indigo-accent)">Yearly Summary</h2>
+      <div id="yearlySummary" class="yearly-summary"></div>
     </section>
 
     <section id="view-transactions" class="view">
       <h2 class="section-title" style="--accent-color:var(--amber-accent)">Transactions</h2>
+      <input type="search" id="txSearchInput" class="tx-search" placeholder="Search by category or note…" />
       <div id="txList" class="tx-list"></div>
     </section>
 
@@ -104,6 +110,17 @@
 
       <h2 class="section-title" style="--accent-color:var(--amber-accent)">Recurring Transactions</h2>
       <div id="recurringList" class="recurring-list"></div>
+
+      <h2 class="section-title" style="--accent-color:var(--red-accent)">Planned Expenses (Bill Due Dates)</h2>
+      <div id="plannedList" class="recurring-list"></div>
+      <div class="add-planned-grid">
+        <select id="plannedCategorySelect" class="planned-select"></select>
+        <input type="number" id="plannedAmountInput" inputmode="decimal" step="0.01" placeholder="Amount" />
+        <input type="text" id="plannedNoteInput" placeholder="Note (optional)" />
+        <input type="date" id="plannedDueDateInput" />
+      </div>
+      <button type="button" id="addPlannedBtn" class="btn btn-amber add-planned-btn">Add Planned Expense</button>
+      <p class="hint-text">Add a one-time bill with a due date. Once the due date arrives, it'll show up on the Dashboard for you to confirm before it's logged as an actual expense.</p>
 
       <h2 class="section-title" style="--accent-color:var(--green-accent)">Backup &amp; Export</h2>
       <div class="export-row">
@@ -153,6 +170,10 @@
       <label class="recurring-check">
         <input type="checkbox" id="recurringInput" />
         <span>Repeat this every month</span>
+      </label>
+      <label class="recurring-check sub-check" id="confirmCheckRow" style="display:none">
+        <input type="checkbox" id="confirmRecurringInput" />
+        <span>Ask me to confirm each month before logging</span>
       </label>
 
       <div class="sheet-actions">
