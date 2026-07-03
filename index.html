@@ -37,8 +37,25 @@
 
       <div class="watch-banner" id="watchBanner">All categories on track</div>
 
+      <div class="section-title-row">
+        <h2 class="section-title" style="--accent-color:var(--indigo-accent)">Savings Goal</h2>
+      </div>
+      <div class="goal-card">
+        <div class="goal-row">
+          <span class="goal-label">Monthly target</span>
+          <input type="number" id="savingsGoalInput" inputmode="decimal" step="0.01" placeholder="0" />
+        </div>
+        <div class="progress-track goal-track">
+          <div class="progress-fill" id="goalFill" style="width:0%"></div>
+        </div>
+        <div class="goal-summary" id="goalSummary">Set a goal to track your savings progress.</div>
+      </div>
+
       <h2 class="section-title" style="--accent-color:var(--blue-accent)">By Category</h2>
       <div id="categoryList" class="category-list"></div>
+
+      <h2 class="section-title" style="--accent-color:var(--amber-accent)">Spending Trend</h2>
+      <div id="trendChart" class="trend-chart"></div>
     </section>
 
     <section id="view-transactions" class="view">
@@ -65,6 +82,9 @@
         <button type="button" id="copyNextBtn" class="link-btn">Copy to next month →</button>
       </div>
       <div id="budgetList" class="budget-list"></div>
+
+      <h2 class="section-title" style="--accent-color:var(--amber-accent)">Recurring Transactions</h2>
+      <div id="recurringList" class="recurring-list"></div>
 
       <h2 class="section-title" style="--accent-color:var(--green-accent)">Backup &amp; Export</h2>
       <div class="export-row">
@@ -110,6 +130,11 @@
 
       <label class="field-label">Note (optional)</label>
       <input type="text" id="noteInput" placeholder="e.g. Weekly grocery run" />
+
+      <label class="recurring-check">
+        <input type="checkbox" id="recurringInput" />
+        <span>Repeat this every month</span>
+      </label>
 
       <div class="sheet-actions">
         <button type="button" id="cancelBtn" class="btn btn-ghost">Cancel</button>

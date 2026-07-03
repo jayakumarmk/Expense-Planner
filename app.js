@@ -75,9 +75,11 @@ function blankData() {
   const thisMonth = `${y}-${pad(m + 1)}`;
   return {
     income: 0,
+    savingsGoal: 0,
     categories: [...DEFAULT_CATEGORIES],
     budgetsByMonth: { [thisMonth]: zeroBudgets(DEFAULT_CATEGORIES) },
     transactions: [],
+    recurringTemplates: [],
   };
 }
 
@@ -102,6 +104,8 @@ function loadData() {
     if (!Array.isArray(parsed.categories) || !parsed.categories.length) {
       parsed.categories = deriveCategoriesFromData(parsed);
     }
+    if (!Array.isArray(parsed.recurringTemplates)) parsed.recurringTemplates = [];
+    if (typeof parsed.savingsGoal !== "number") parsed.savingsGoal = 0;
     return parsed;
   } catch {
     const blank = blankData();
@@ -163,12 +167,42 @@ function categoryTotalsForMonth(month) {
   return totals;
 }
 
+// Auto-creates this month's occurrence of each recurring transaction the
+// first time the month is viewed, tagged with recurringId so it's never
+// duplicated on subsequent views.
+function ensureRecurringForMonth(month) {
+  let changed = false;
+  (state.recurringTemplates || []).forEach((tpl) => {
+    const exists = state.transactions.some((t) => t.recurringId === tpl.id && monthKey(t.date) === month);
+    if (!exists) {
+      const [y, m] = month.split("-").map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      const day = Math.min(tpl.day, lastDay);
+      const date = `${month}-${String(day).padStart(2, "0")}`;
+      state.transactions.push({
+        id: cryptoId(),
+        date,
+        category: tpl.category,
+        note: tpl.note,
+        amount: tpl.amount,
+        recurringId: tpl.id,
+      });
+      changed = true;
+    }
+  });
+  if (changed) saveData();
+}
+
 function render() {
   populateMonthSelector();
+  ensureRecurringForMonth(currentMonth);
   renderDashboard();
   renderTransactions();
   renderBudgetSettings();
   renderCategoryManager();
+  renderRecurringList();
+  renderSavingsGoal();
+  renderTrendChart();
 }
 
 function renderDashboard() {
@@ -272,6 +306,7 @@ function renderBudgetSettings() {
   document.getElementById("incomeInput").oninput = (e) => {
     state.income = Number(e.target.value) || 0;
     saveData();
+    updateGoalProgress();
   };
 
   const budgets = getBudgetsForMonth(currentMonth);
@@ -298,7 +333,7 @@ function renderCategoryManager() {
   document.getElementById("categoryManageList").innerHTML = state.categories.map((c) => `
     <div class="category-manage-item" style="--cat-color:${categoryColor(c)}">
       <input type="text" data-original="${escapeHtml(c)}" value="${escapeHtml(c)}" />
-      <button type="button" class="cat-delete" data-cat="${escapeHtml(c)}">&times;</button>
+      <button type="button" class="cat-delete" data-del-cat="${escapeHtml(c)}">&times;</button>
     </div>
   `).join("");
 
@@ -306,7 +341,98 @@ function renderCategoryManager() {
     input.addEventListener("change", () => renameCategory(input.dataset.original, input.value.trim()));
   });
   document.querySelectorAll("#categoryManageList .cat-delete").forEach((btn) => {
-    btn.addEventListener("click", () => deleteCategory(btn.dataset.cat));
+    btn.addEventListener("click", () => deleteCategory(btn.dataset.delCat));
+  });
+}
+
+function updateGoalProgress() {
+  const totals = categoryTotalsForMonth(currentMonth);
+  const totalActual = state.categories.reduce((s, c) => s + (totals[c] || 0), 0);
+  const netSavings = state.income - totalActual;
+  const goal = state.savingsGoal;
+  const fill = document.getElementById("goalFill");
+  const summary = document.getElementById("goalSummary");
+
+  if (!goal) {
+    fill.style.width = "0%";
+    fill.style.background = "var(--slate-tint)";
+    summary.textContent = "Set a goal to track your savings progress.";
+    return;
+  }
+  const pct = Math.max(0, netSavings / goal);
+  fill.style.width = `${Math.min(pct * 100, 100)}%`;
+  fill.style.background = progressColor(Math.min(pct, 1), false);
+  summary.textContent = netSavings < 0
+    ? `${fmt(Math.abs(netSavings))} over income so far — no savings yet this month.`
+    : `Saved ${fmt(netSavings)} of ${fmt(goal)} goal (${Math.round(pct * 100)}%).`;
+}
+
+function renderSavingsGoal() {
+  const goalInput = document.getElementById("savingsGoalInput");
+  goalInput.value = state.savingsGoal ? round2(state.savingsGoal) : "";
+  goalInput.oninput = () => {
+    state.savingsGoal = Number(goalInput.value) || 0;
+    saveData();
+    updateGoalProgress();
+  };
+  updateGoalProgress();
+}
+
+function renderTrendChart() {
+  const base = currentMonth || monthKey(todayStr());
+  const months = [];
+  for (let i = 5; i >= 0; i--) months.push(addMonths(base, -i));
+
+  const values = months.map((m) => {
+    const totals = categoryTotalsForMonth(m);
+    return state.categories.reduce((s, c) => s + (totals[c] || 0), 0);
+  });
+  const max = Math.max(...values, 1);
+  const barW = 32, gap = 14, h = 120;
+  const bars = values.map((v, i) => {
+    const barH = Math.max(2, (v / max) * (h - 34));
+    const x = i * (barW + gap) + gap;
+    const y = h - barH - 20;
+    const isCurrent = months[i] === currentMonth;
+    const color = isCurrent ? "#2563EB" : "#94A3B8";
+    const label = monthLabel(months[i]).split(" ")[0];
+    const amountLabel = v >= 1000 ? `${Math.round(v / 100) / 10}k` : Math.round(v).toString();
+    return `
+      <text x="${x + barW / 2}" y="${y - 5}" text-anchor="middle" font-size="9" fill="#334155">${amountLabel}</text>
+      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" fill="${color}"></rect>
+      <text x="${x + barW / 2}" y="${h - 5}" text-anchor="middle" font-size="10" fill="#334155">${label}</text>
+    `;
+  }).join("");
+  const totalW = months.length * (barW + gap) + gap;
+  document.getElementById("trendChart").innerHTML =
+    `<svg viewBox="0 0 ${totalW} ${h}" width="100%" height="140" preserveAspectRatio="xMidYMid meet">${bars}</svg>`;
+}
+
+function renderRecurringList() {
+  const list = state.recurringTemplates || [];
+  const el = document.getElementById("recurringList");
+  if (list.length === 0) {
+    el.innerHTML = `<div class="empty-state">No recurring transactions yet. Check "Repeat this every month" when adding an expense.</div>`;
+    return;
+  }
+  el.innerHTML = list.map((tpl) => `
+    <div class="recurring-item" style="--cat-color:${categoryColor(tpl.category)}">
+      <div class="recurring-info">
+        <span class="recurring-category">${tpl.category}</span>
+        <span class="recurring-meta">${tpl.note ? escapeHtml(tpl.note) + " · " : ""}Every month on day ${tpl.day}</span>
+      </div>
+      <span class="recurring-amount">${fmt(Number(tpl.amount))}</span>
+      <button class="recurring-stop" data-id="${tpl.id}">&times;</button>
+    </div>
+  `).join("");
+
+  el.querySelectorAll(".recurring-stop").forEach((btn) => {
+    btn.onclick = () => {
+      if (!confirm("Stop this recurring transaction? Past and current entries will stay, but no new ones will be created.")) return;
+      state.recurringTemplates = state.recurringTemplates.filter((t) => t.id !== btn.dataset.id);
+      saveData();
+      render();
+    };
   });
 }
 
@@ -396,9 +522,11 @@ function importJSON(file) {
     if (!ok) return;
     state = {
       income: Number(parsed.income) || 0,
+      savingsGoal: Number(parsed.savingsGoal) || 0,
       categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : deriveCategoriesFromData(parsed),
       budgetsByMonth: parsed.budgetsByMonth,
       transactions: parsed.transactions,
+      recurringTemplates: Array.isArray(parsed.recurringTemplates) ? parsed.recurringTemplates : [],
     };
     saveData();
     currentMonth = null;
@@ -434,6 +562,8 @@ function openSheet(tx) {
   renderChips();
   document.getElementById("amountInput").value = tx ? round2(tx.amount) : "";
   document.getElementById("noteInput").value = tx ? tx.note || "" : "";
+  document.getElementById("recurringInput").checked = false;
+  document.querySelector(".recurring-check").style.display = tx ? "none" : "flex";
   overlay.classList.add("show");
   sheet.classList.add("show");
 }
@@ -466,6 +596,7 @@ document.getElementById("addForm").addEventListener("submit", (e) => {
   const amount = Number(document.getElementById("amountInput").value);
   const date = document.getElementById("dateInput").value;
   const note = document.getElementById("noteInput").value.trim();
+  const makeRecurring = document.getElementById("recurringInput").checked;
   if (!amount || !date) return;
   if (editingId) {
     const t = state.transactions.find((tx) => tx.id === editingId);
@@ -476,7 +607,19 @@ document.getElementById("addForm").addEventListener("submit", (e) => {
       t.amount = amount;
     }
   } else {
-    state.transactions.push({ id: cryptoId(), date, category: selectedChip, note, amount });
+    const newTx = { id: cryptoId(), date, category: selectedChip, note, amount };
+    if (makeRecurring) {
+      const tplId = cryptoId();
+      state.recurringTemplates.push({
+        id: tplId,
+        category: selectedChip,
+        note,
+        amount,
+        day: Number(date.split("-")[2]),
+      });
+      newTx.recurringId = tplId;
+    }
+    state.transactions.push(newTx);
   }
   saveData();
   closeSheet();

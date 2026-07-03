@@ -117,6 +117,42 @@ body {
 .watch-banner.warn { background: var(--amber-tint); color: #92400E; }
 .watch-banner.danger { background: var(--red-tint); color: #991B1B; }
 
+.goal-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--indigo-accent);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 18px;
+}
+.goal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.goal-label { font-weight: 600; font-size: 14px; color: var(--navy); }
+.goal-row input {
+  width: 120px;
+  text-align: right;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--indigo-accent);
+}
+.goal-track { margin-bottom: 8px; }
+.goal-summary { font-size: 12px; color: var(--slate-text); }
+
+.trend-chart {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 10px 6px;
+  margin-bottom: 18px;
+}
+
 .section-title {
   font-size: 15px;
   font-weight: 700;
@@ -349,6 +385,36 @@ body {
 }
 .add-category-row .btn { flex: none; padding: 10px 16px; }
 
+.recurring-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.recurring-item {
+  background: white;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--cat-color, var(--amber-accent));
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.recurring-info { display: flex; flex-direction: column; }
+.recurring-category { font-weight: 600; font-size: 14px; }
+.recurring-meta { font-size: 12px; color: var(--slate-text); }
+.recurring-amount { font-weight: 700; font-size: 14px; white-space: nowrap; margin-left: 8px; }
+.recurring-stop {
+  background: none;
+  border: none;
+  color: var(--red-accent);
+  font-size: 18px;
+  padding: 2px 6px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -451,6 +517,17 @@ body {
   font-size: 16px;
   font-family: inherit;
 }
+
+.recurring-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.recurring-check input { width: 18px; height: 18px; }
 
 .category-chips {
   display: flex;
