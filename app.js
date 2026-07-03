@@ -1,3 +1,4 @@
+// build: 2026-07-03 (redeploy trigger)
 const DEFAULT_CATEGORIES = [
   "Housing/Rent", "Utilities", "Groceries", "Transportation", "Insurance",
   "Debt/Loan Payments", "Dining Out", "Entertainment", "Subscriptions",
