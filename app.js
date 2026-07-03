@@ -25,6 +25,39 @@ function getCategoryCountry(c) {
   return (state.categoryCountry && state.categoryCountry[c]) || "Australia";
 }
 
+const COUNTRY_CURRENCY = { Australia: "AUD", India: "INR" };
+const CURRENCY_SYMBOL = { AUD: "$", INR: "₹" };
+const DEFAULT_EXCHANGE_RATE = 55; // starting default for 1 AUD in INR
+
+function getCategoryCurrency(c) {
+  return COUNTRY_CURRENCY[getCategoryCountry(c)] || "AUD";
+}
+
+// Returns this month's AUD->INR rate, auto-carrying forward from the most
+// recent prior month the same way budgets do.
+function getExchangeRateForMonth(month) {
+  if (state.exchangeRatesByMonth[month]) return state.exchangeRatesByMonth[month];
+  const priorMonths = Object.keys(state.exchangeRatesByMonth).filter((m) => m < month).sort();
+  const rate = priorMonths.length
+    ? state.exchangeRatesByMonth[priorMonths[priorMonths.length - 1]]
+    : DEFAULT_EXCHANGE_RATE;
+  state.exchangeRatesByMonth[month] = rate;
+  saveData();
+  return rate;
+}
+
+function toAUD(amount, currency, month) {
+  if (currency === "AUD") return amount;
+  const rate = getExchangeRateForMonth(month) || DEFAULT_EXCHANGE_RATE;
+  return amount / rate;
+}
+
+function fromAUD(amountAUD, toCurrency, month) {
+  if (toCurrency === "AUD") return amountAUD;
+  const rate = getExchangeRateForMonth(month) || DEFAULT_EXCHANGE_RATE;
+  return amountAUD * rate;
+}
+
 const CATEGORY_COLORS = [
   "#2563EB", "#D97706", "#16A34A", "#0D9488", "#4F46E5", "#DB2777",
   "#7C3AED", "#0891B2", "#CA8A04", "#DC2626", "#059669", "#EA580C", "#4338CA",
@@ -84,6 +117,8 @@ function blankData() {
     savingsGoal: 0,
     categories: [...DEFAULT_CATEGORIES],
     categoryCountry: {},
+    displayCurrency: "AUD",
+    exchangeRatesByMonth: { [thisMonth]: DEFAULT_EXCHANGE_RATE },
     budgetsByMonth: { [thisMonth]: zeroBudgets(DEFAULT_CATEGORIES) },
     transactions: [],
     recurringTemplates: [],
@@ -114,6 +149,8 @@ function loadData() {
     if (!Array.isArray(parsed.recurringTemplates)) parsed.recurringTemplates = [];
     if (typeof parsed.savingsGoal !== "number") parsed.savingsGoal = 0;
     if (!parsed.categoryCountry || typeof parsed.categoryCountry !== "object") parsed.categoryCountry = {};
+    if (!parsed.displayCurrency) parsed.displayCurrency = "AUD";
+    if (!parsed.exchangeRatesByMonth || typeof parsed.exchangeRatesByMonth !== "object") parsed.exchangeRatesByMonth = {};
     return parsed;
   } catch {
     const blank = blankData();
@@ -126,9 +163,10 @@ function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function fmt(n) {
+function fmt(n, currency = "AUD") {
+  const symbol = CURRENCY_SYMBOL[currency] || "$";
   const sign = n < 0 ? "-" : "";
-  return sign + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return sign + symbol + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function round2(n) {
@@ -188,13 +226,16 @@ function renderCountryBreakdown() {
   });
 
   const countryColors = { Australia: "#0D9488", India: "#D97706" };
-  document.getElementById("countryBreakdown").innerHTML = COUNTRIES.map((co) => `
+  document.getElementById("countryBreakdown").innerHTML = COUNTRIES.map((co) => {
+    const cur = COUNTRY_CURRENCY[co] || "AUD";
+    return `
     <div class="country-card" style="--country-color:${countryColors[co] || "#0D9488"}">
       <div class="country-name">${co}</div>
-      <div class="country-spent">${fmt(byCountry[co].actual)}</div>
-      <div class="country-budget">of ${fmt(byCountry[co].budgeted)} budgeted</div>
+      <div class="country-spent">${fmt(byCountry[co].actual, cur)}</div>
+      <div class="country-budget">of ${fmt(byCountry[co].budgeted, cur)} budgeted</div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
 // Auto-creates this month's occurrence of each recurring transaction the
@@ -230,6 +271,7 @@ function render() {
   renderCountryBreakdown();
   renderTransactions();
   renderBudgetSettings();
+  renderCurrencySettings();
   renderCategoryManager();
   renderRecurringList();
   renderSavingsGoal();
@@ -239,14 +281,17 @@ function render() {
 function renderDashboard() {
   const totals = categoryTotalsForMonth(currentMonth);
   const budgets = getBudgetsForMonth(currentMonth);
-  const totalBudgeted = state.categories.reduce((s, c) => s + (budgets[c] || 0), 0);
-  const totalActual = state.categories.reduce((s, c) => s + (totals[c] || 0), 0);
+  const displayCur = state.displayCurrency || "AUD";
+  const totalBudgetedAUD = state.categories.reduce((s, c) => s + toAUD(budgets[c] || 0, getCategoryCurrency(c), currentMonth), 0);
+  const totalActualAUD = state.categories.reduce((s, c) => s + toAUD(totals[c] || 0, getCategoryCurrency(c), currentMonth), 0);
+  const totalBudgeted = fromAUD(totalBudgetedAUD, displayCur, currentMonth);
+  const totalActual = fromAUD(totalActualAUD, displayCur, currentMonth);
   const remaining = totalBudgeted - totalActual;
 
-  document.getElementById("kpiBudgeted").textContent = fmt(totalBudgeted);
-  document.getElementById("kpiActual").textContent = fmt(totalActual);
+  document.getElementById("kpiBudgeted").textContent = fmt(totalBudgeted, displayCur);
+  document.getElementById("kpiActual").textContent = fmt(totalActual, displayCur);
   const remEl = document.getElementById("kpiRemaining");
-  remEl.textContent = fmt(remaining);
+  remEl.textContent = fmt(remaining, displayCur);
   remEl.style.color = remaining < 0 ? "var(--red-accent)" : "var(--navy)";
 
   let overCount = 0, nearCount = 0;
@@ -278,7 +323,7 @@ function renderDashboard() {
     <div class="category-item" style="--cat-color:${categoryColor(c)}">
       <div class="category-item-top">
         <span class="category-name">${c}</span>
-        <span class="category-amounts">${fmt(actual)} / ${fmt(budget)}</span>
+        <span class="category-amounts">${fmt(actual, getCategoryCurrency(c))} / ${fmt(budget, getCategoryCurrency(c))}</span>
       </div>
       <div class="progress-track">
         <div class="progress-fill" style="width:${Math.min(pct * 100, 100)}%;background:${progressColor(pct, over)}"></div>
@@ -303,7 +348,7 @@ function renderTransactions() {
         <span class="tx-category" style="color:${categoryColor(t.category)}">${t.category}</span>
         <span class="tx-meta">${t.date}${t.note ? " · " + escapeHtml(t.note) : ""}</span>
       </div>
-      <span class="tx-amount">${fmt(Number(t.amount))}</span>
+      <span class="tx-amount">${fmt(Number(t.amount), getCategoryCurrency(t.category))}</span>
       <button class="tx-edit" data-id="${t.id}">&#9998;</button>
       <button class="tx-delete" data-id="${t.id}">&times;</button>
     </div>
@@ -346,7 +391,7 @@ function renderBudgetSettings() {
 
   document.getElementById("budgetList").innerHTML = state.categories.map((c) => `
     <div class="budget-item" style="--cat-color:${categoryColor(c)}">
-      <span class="cat-name">${c}</span>
+      <span class="cat-name">${c}<span class="cat-currency">${getCategoryCurrency(c)}</span></span>
       <input type="number" inputmode="decimal" step="0.01" data-budget-cat="${c}" value="${round2(budgets[c] || 0)}" />
     </div>
   `).join("");
@@ -359,6 +404,30 @@ function renderBudgetSettings() {
       renderCountryBreakdown();
     };
   });
+}
+
+function renderCurrencySettings() {
+  const rateInput = document.getElementById("exchangeRateInput");
+  rateInput.value = getExchangeRateForMonth(currentMonth);
+  rateInput.oninput = () => {
+    state.exchangeRatesByMonth[currentMonth] = Number(rateInput.value) || 0;
+    saveData();
+    renderDashboard();
+    renderCountryBreakdown();
+    updateGoalProgress();
+    renderTrendChart();
+  };
+
+  const nextMonth = addMonths(currentMonth, 1);
+  document.getElementById("copyRateBtn").textContent = `Copy rate to ${monthLabel(nextMonth)} →`;
+
+  const currSelect = document.getElementById("displayCurrencySelect");
+  currSelect.value = state.displayCurrency || "AUD";
+  currSelect.onchange = () => {
+    state.displayCurrency = currSelect.value;
+    saveData();
+    render();
+  };
 }
 
 function renderCategoryManager() {
@@ -389,9 +458,11 @@ function renderCategoryManager() {
 
 function updateGoalProgress() {
   const totals = categoryTotalsForMonth(currentMonth);
-  const totalActual = state.categories.reduce((s, c) => s + (totals[c] || 0), 0);
-  const netSavings = state.income - totalActual;
-  const goal = state.savingsGoal;
+  const totalActualAUD = state.categories.reduce((s, c) => s + toAUD(totals[c] || 0, getCategoryCurrency(c), currentMonth), 0);
+  const netSavingsAUD = state.income - totalActualAUD;
+  const displayCur = state.displayCurrency || "AUD";
+  const netSavings = fromAUD(netSavingsAUD, displayCur, currentMonth);
+  const goal = fromAUD(state.savingsGoal || 0, displayCur, currentMonth);
   const fill = document.getElementById("goalFill");
   const summary = document.getElementById("goalSummary");
 
@@ -405,15 +476,17 @@ function updateGoalProgress() {
   fill.style.width = `${Math.min(pct * 100, 100)}%`;
   fill.style.background = progressColor(Math.min(pct, 1), false);
   summary.textContent = netSavings < 0
-    ? `${fmt(Math.abs(netSavings))} over income so far — no savings yet this month.`
-    : `Saved ${fmt(netSavings)} of ${fmt(goal)} goal (${Math.round(pct * 100)}%).`;
+    ? `${fmt(Math.abs(netSavings), displayCur)} over income so far — no savings yet this month.`
+    : `Saved ${fmt(netSavings, displayCur)} of ${fmt(goal, displayCur)} goal (${Math.round(pct * 100)}%).`;
 }
 
 function renderSavingsGoal() {
   const goalInput = document.getElementById("savingsGoalInput");
-  goalInput.value = state.savingsGoal ? round2(state.savingsGoal) : "";
+  const displayCur = state.displayCurrency || "AUD";
+  goalInput.value = state.savingsGoal ? round2(fromAUD(state.savingsGoal, displayCur, currentMonth)) : "";
   goalInput.oninput = () => {
-    state.savingsGoal = Number(goalInput.value) || 0;
+    const entered = Number(goalInput.value) || 0;
+    state.savingsGoal = toAUD(entered, displayCur, currentMonth);
     saveData();
     updateGoalProgress();
   };
@@ -424,10 +497,12 @@ function renderTrendChart() {
   const base = currentMonth || monthKey(todayStr());
   const months = [];
   for (let i = 5; i >= 0; i--) months.push(addMonths(base, -i));
+  const displayCur = state.displayCurrency || "AUD";
 
   const values = months.map((m) => {
     const totals = categoryTotalsForMonth(m);
-    return state.categories.reduce((s, c) => s + (totals[c] || 0), 0);
+    const totalAUD = state.categories.reduce((s, c) => s + toAUD(totals[c] || 0, getCategoryCurrency(c), m), 0);
+    return fromAUD(totalAUD, displayCur, m);
   });
   const max = Math.max(...values, 1);
   const barW = 32, gap = 14, h = 120;
@@ -438,7 +513,8 @@ function renderTrendChart() {
     const isCurrent = months[i] === currentMonth;
     const color = isCurrent ? "#2563EB" : "#94A3B8";
     const label = monthLabel(months[i]).split(" ")[0];
-    const amountLabel = v >= 1000 ? `${Math.round(v / 100) / 10}k` : Math.round(v).toString();
+    const symbol = CURRENCY_SYMBOL[displayCur] || "$";
+    const amountLabel = symbol + (v >= 1000 ? `${Math.round(v / 100) / 10}k` : Math.round(v).toString());
     return `
       <text x="${x + barW / 2}" y="${y - 5}" text-anchor="middle" font-size="9" fill="#334155">${amountLabel}</text>
       <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" fill="${color}"></rect>
@@ -463,7 +539,7 @@ function renderRecurringList() {
         <span class="recurring-category">${tpl.category}</span>
         <span class="recurring-meta">${tpl.note ? escapeHtml(tpl.note) + " · " : ""}Every month on day ${tpl.day}</span>
       </div>
-      <span class="recurring-amount">${fmt(Number(tpl.amount))}</span>
+      <span class="recurring-amount">${fmt(Number(tpl.amount), getCategoryCurrency(tpl.category))}</span>
       <button class="recurring-stop" data-id="${tpl.id}">&times;</button>
     </div>
   `).join("");
@@ -535,11 +611,11 @@ function downloadFile(filename, content, mime) {
 }
 
 function exportCSV() {
-  const header = "Date,Category,Description,Amount";
+  const header = "Date,Category,Description,Amount,Currency";
   const rows = state.transactions
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((t) => [t.date, t.category, `"${(t.note || "").replace(/"/g, '""')}"`, t.amount].join(","));
+    .map((t) => [t.date, t.category, `"${(t.note || "").replace(/"/g, '""')}"`, t.amount, getCategoryCurrency(t.category)].join(","));
   downloadFile(`transactions-${todayStr()}.csv`, [header, ...rows].join("\n"), "text/csv");
 }
 
@@ -572,6 +648,8 @@ function importJSON(file) {
       savingsGoal: Number(parsed.savingsGoal) || 0,
       categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : deriveCategoriesFromData(parsed),
       categoryCountry: parsed.categoryCountry && typeof parsed.categoryCountry === "object" ? parsed.categoryCountry : {},
+      displayCurrency: parsed.displayCurrency || "AUD",
+      exchangeRatesByMonth: parsed.exchangeRatesByMonth && typeof parsed.exchangeRatesByMonth === "object" ? parsed.exchangeRatesByMonth : {},
       budgetsByMonth: parsed.budgetsByMonth,
       transactions: parsed.transactions,
       recurringTemplates: Array.isArray(parsed.recurringTemplates) ? parsed.recurringTemplates : [],
@@ -633,6 +711,7 @@ function renderChips() {
       renderChips();
     };
   });
+  document.getElementById("amountCurrencyHint").textContent = `(${getCategoryCurrency(selectedChip)})`;
 }
 
 document.getElementById("addBtn").addEventListener("click", () => openSheet());
@@ -690,6 +769,14 @@ document.getElementById("copyNextBtn").addEventListener("click", () => {
   state.budgetsByMonth[nextMonth] = { ...getBudgetsForMonth(currentMonth) };
   saveData();
   alert(`Budget copied to ${monthLabel(nextMonth)}.`);
+  render();
+});
+
+document.getElementById("copyRateBtn").addEventListener("click", () => {
+  const nextMonth = addMonths(currentMonth, 1);
+  state.exchangeRatesByMonth[nextMonth] = getExchangeRateForMonth(currentMonth);
+  saveData();
+  alert(`Exchange rate copied to ${monthLabel(nextMonth)}.`);
   render();
 });
 
