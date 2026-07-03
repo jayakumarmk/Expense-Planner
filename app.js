@@ -19,6 +19,12 @@ function deriveCategoriesFromData(data) {
   return Array.from(set);
 }
 
+const COUNTRIES = ["Australia", "India"];
+
+function getCategoryCountry(c) {
+  return (state.categoryCountry && state.categoryCountry[c]) || "Australia";
+}
+
 const CATEGORY_COLORS = [
   "#2563EB", "#D97706", "#16A34A", "#0D9488", "#4F46E5", "#DB2777",
   "#7C3AED", "#0891B2", "#CA8A04", "#DC2626", "#059669", "#EA580C", "#4338CA",
@@ -77,6 +83,7 @@ function blankData() {
     income: 0,
     savingsGoal: 0,
     categories: [...DEFAULT_CATEGORIES],
+    categoryCountry: {},
     budgetsByMonth: { [thisMonth]: zeroBudgets(DEFAULT_CATEGORIES) },
     transactions: [],
     recurringTemplates: [],
@@ -106,6 +113,7 @@ function loadData() {
     }
     if (!Array.isArray(parsed.recurringTemplates)) parsed.recurringTemplates = [];
     if (typeof parsed.savingsGoal !== "number") parsed.savingsGoal = 0;
+    if (!parsed.categoryCountry || typeof parsed.categoryCountry !== "object") parsed.categoryCountry = {};
     return parsed;
   } catch {
     const blank = blankData();
@@ -167,6 +175,28 @@ function categoryTotalsForMonth(month) {
   return totals;
 }
 
+function renderCountryBreakdown() {
+  const totals = categoryTotalsForMonth(currentMonth);
+  const budgets = getBudgetsForMonth(currentMonth);
+  const byCountry = {};
+  COUNTRIES.forEach((co) => (byCountry[co] = { actual: 0, budgeted: 0 }));
+  state.categories.forEach((c) => {
+    const co = getCategoryCountry(c);
+    if (!byCountry[co]) byCountry[co] = { actual: 0, budgeted: 0 };
+    byCountry[co].actual += totals[c] || 0;
+    byCountry[co].budgeted += budgets[c] || 0;
+  });
+
+  const countryColors = { Australia: "#0D9488", India: "#D97706" };
+  document.getElementById("countryBreakdown").innerHTML = COUNTRIES.map((co) => `
+    <div class="country-card" style="--country-color:${countryColors[co] || "#0D9488"}">
+      <div class="country-name">${co}</div>
+      <div class="country-spent">${fmt(byCountry[co].actual)}</div>
+      <div class="country-budget">of ${fmt(byCountry[co].budgeted)} budgeted</div>
+    </div>
+  `).join("");
+}
+
 // Auto-creates this month's occurrence of each recurring transaction the
 // first time the month is viewed, tagged with recurringId so it's never
 // duplicated on subsequent views.
@@ -197,6 +227,7 @@ function render() {
   populateMonthSelector();
   ensureRecurringForMonth(currentMonth);
   renderDashboard();
+  renderCountryBreakdown();
   renderTransactions();
   renderBudgetSettings();
   renderCategoryManager();
@@ -325,6 +356,7 @@ function renderBudgetSettings() {
       budgets[input.dataset.budgetCat] = Number(input.value) || 0;
       saveData();
       renderDashboard();
+      renderCountryBreakdown();
     };
   });
 }
@@ -333,12 +365,22 @@ function renderCategoryManager() {
   document.getElementById("categoryManageList").innerHTML = state.categories.map((c) => `
     <div class="category-manage-item" style="--cat-color:${categoryColor(c)}">
       <input type="text" data-original="${escapeHtml(c)}" value="${escapeHtml(c)}" />
+      <select class="cat-country" data-country-cat="${escapeHtml(c)}">
+        ${COUNTRIES.map((co) => `<option value="${co}" ${getCategoryCountry(c) === co ? "selected" : ""}>${co}</option>`).join("")}
+      </select>
       <button type="button" class="cat-delete" data-del-cat="${escapeHtml(c)}">&times;</button>
     </div>
   `).join("");
 
   document.querySelectorAll("#categoryManageList input").forEach((input) => {
     input.addEventListener("change", () => renameCategory(input.dataset.original, input.value.trim()));
+  });
+  document.querySelectorAll("#categoryManageList .cat-country").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      state.categoryCountry[sel.dataset.countryCat] = sel.value;
+      saveData();
+      renderCountryBreakdown();
+    });
   });
   document.querySelectorAll("#categoryManageList .cat-delete").forEach((btn) => {
     btn.addEventListener("click", () => deleteCategory(btn.dataset.delCat));
@@ -453,6 +495,10 @@ function renameCategory(oldName, newName) {
       delete monthBudgets[oldName];
     }
   });
+  if (oldName in state.categoryCountry) {
+    state.categoryCountry[newName] = state.categoryCountry[oldName];
+    delete state.categoryCountry[oldName];
+  }
   state.transactions.forEach((t) => {
     if (t.category === oldName) t.category = newName;
   });
@@ -471,6 +517,7 @@ function deleteCategory(name) {
   Object.values(state.budgetsByMonth).forEach((monthBudgets) => {
     delete monthBudgets[name];
   });
+  delete state.categoryCountry[name];
   saveData();
   render();
 }
@@ -524,6 +571,7 @@ function importJSON(file) {
       income: Number(parsed.income) || 0,
       savingsGoal: Number(parsed.savingsGoal) || 0,
       categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : deriveCategoriesFromData(parsed),
+      categoryCountry: parsed.categoryCountry && typeof parsed.categoryCountry === "object" ? parsed.categoryCountry : {},
       budgetsByMonth: parsed.budgetsByMonth,
       transactions: parsed.transactions,
       recurringTemplates: Array.isArray(parsed.recurringTemplates) ? parsed.recurringTemplates : [],

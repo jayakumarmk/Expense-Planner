@@ -117,6 +117,30 @@ body {
 .watch-banner.warn { background: var(--amber-tint); color: #92400E; }
 .watch-banner.danger { background: var(--red-tint); color: #991B1B; }
 
+.country-breakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.country-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--country-color, var(--teal-accent));
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.country-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--slate-text);
+  margin-bottom: 4px;
+}
+.country-spent { font-size: 17px; font-weight: 700; color: var(--navy); }
+.country-budget { font-size: 12px; color: var(--slate-text); margin-top: 2px; }
+
 .goal-card {
   background: white;
   border: 1px solid var(--border);
@@ -367,6 +391,18 @@ body {
   font-size: 18px;
   padding: 2px 8px;
   cursor: pointer;
+}
+.category-manage-item .cat-country {
+  flex: none;
+  width: 92px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--slate-text);
+  font-family: inherit;
+  background: white;
 }
 
 .add-category-row {
