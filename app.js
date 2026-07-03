@@ -543,7 +543,7 @@ function renderCategoryManager() {
     sel.addEventListener("change", () => {
       state.categoryCountry[sel.dataset.countryCat] = sel.value;
       saveData();
-      renderCountryBreakdown();
+      render();
     });
   });
   document.querySelectorAll("#categoryManageList .cat-delete").forEach((btn) => {
