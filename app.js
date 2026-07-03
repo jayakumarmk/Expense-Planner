@@ -235,13 +235,12 @@ function renderCountryBreakdown() {
   document.getElementById("countryBreakdown").innerHTML = COUNTRIES.map((co) => {
     const cur = COUNTRY_CURRENCY[co] || "AUD";
     const audLine = cur !== "AUD"
-      ? `<div class="country-aud">≈ ${fmt(toAUD(byCountry[co].actual, cur, currentMonth), "AUD")} of ${fmt(toAUD(byCountry[co].budgeted, cur, currentMonth), "AUD")} AUD</div>`
+      ? `<div class="country-spent">${fmt(toAUD(byCountry[co].actual, cur, currentMonth), "AUD")}</div>`
       : "";
     return `
     <div class="country-card" style="--country-color:${countryColors[co] || "#0D9488"}">
       <div class="country-name">${co}</div>
       <div class="country-spent">${fmt(byCountry[co].actual, cur)}</div>
-      <div class="country-budget">of ${fmt(byCountry[co].budgeted, cur)} budgeted</div>
       ${audLine}
     </div>
   `;

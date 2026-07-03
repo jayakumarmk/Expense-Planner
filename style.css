@@ -160,8 +160,7 @@ body {
   margin-bottom: 4px;
 }
 .country-spent { font-size: 17px; font-weight: 700; color: var(--navy); }
-.country-budget { font-size: 12px; color: var(--slate-text); margin-top: 2px; }
-.country-aud { font-size: 11px; color: #94A3B8; margin-top: 4px; font-style: italic; }
+.country-spent + .country-spent { margin-top: 4px; }
 
 .goal-card {
   background: white;
