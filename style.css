@@ -75,7 +75,7 @@ body {
 
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -89,6 +89,7 @@ body {
 .kpi-card.tint-blue { background: var(--blue-tint); border-top-color: var(--blue-accent); }
 .kpi-card.tint-amber { background: var(--amber-tint); border-top-color: var(--amber-accent); }
 .kpi-card.tint-teal { background: var(--teal-tint); border-top-color: var(--teal-accent); }
+.kpi-card.tint-indigo { background: var(--indigo-tint); border-top-color: var(--indigo-accent); }
 
 .kpi-label {
   font-size: 10px;
@@ -161,6 +162,7 @@ body {
 }
 .country-spent { font-size: 17px; font-weight: 700; color: var(--navy); }
 .country-spent + .country-spent { margin-top: 4px; }
+.country-budget-inline { font-size: 12px; font-weight: 700; color: var(--navy); }
 
 .goal-card {
   background: white;

@@ -235,12 +235,12 @@ function renderCountryBreakdown() {
   document.getElementById("countryBreakdown").innerHTML = COUNTRIES.map((co) => {
     const cur = COUNTRY_CURRENCY[co] || "AUD";
     const audLine = cur !== "AUD"
-      ? `<div class="country-spent">${fmt(toAUD(byCountry[co].actual, cur, currentMonth), "AUD")}</div>`
+      ? `<div class="country-spent">${fmt(toAUD(byCountry[co].actual, cur, currentMonth), "AUD")} <span class="country-budget-inline">(${fmt(toAUD(byCountry[co].budgeted, cur, currentMonth), "AUD")})</span></div>`
       : "";
     return `
     <div class="country-card" style="--country-color:${countryColors[co] || "#0D9488"}">
       <div class="country-name">${co}</div>
-      <div class="country-spent">${fmt(byCountry[co].actual, cur)}</div>
+      <div class="country-spent">${fmt(byCountry[co].actual, cur)} <span class="country-budget-inline">(${fmt(byCountry[co].budgeted, cur)})</span></div>
       ${audLine}
     </div>
   `;
@@ -384,6 +384,12 @@ function renderDashboard() {
   const remEl = document.getElementById("kpiRemaining");
   remEl.textContent = fmt(remaining, displayCur);
   remEl.style.color = remaining < 0 ? "var(--red-accent)" : "var(--navy)";
+
+  const savedAUD = state.income - totalActualAUD;
+  const saved = fromAUD(savedAUD, displayCur, currentMonth);
+  const savedEl = document.getElementById("kpiSaved");
+  savedEl.textContent = fmt(saved, displayCur);
+  savedEl.style.color = saved < 0 ? "var(--red-accent)" : "var(--navy)";
 
   let overCount = 0, nearCount = 0;
   const rows = state.categories
@@ -968,9 +974,17 @@ document.getElementById("resetBtn").addEventListener("click", () => {
 
 document.getElementById("copyNextBtn").addEventListener("click", () => {
   const nextMonth = addMonths(currentMonth, 1);
-  state.budgetsByMonth[nextMonth] = { ...getBudgetsForMonth(currentMonth) };
+  const thisBudgets = getBudgetsForMonth(currentMonth);
+  const thisTotals = categoryTotalsForMonth(currentMonth);
+  const nextBudgets = {};
+  state.categories.forEach((c) => {
+    const budget = thisBudgets[c] || 0;
+    const actual = thisTotals[c] || 0;
+    nextBudgets[c] = budget + (budget - actual); // roll this month's per-category remaining into next month's budget
+  });
+  state.budgetsByMonth[nextMonth] = nextBudgets;
   saveData();
-  alert(`Budget copied to ${monthLabel(nextMonth)}.`);
+  alert(`Budget copied to ${monthLabel(nextMonth)}, with this month's remaining amount rolled into each category.`);
   render();
 });
 
