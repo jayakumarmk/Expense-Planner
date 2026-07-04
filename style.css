@@ -200,6 +200,37 @@ body {
   margin-bottom: 18px;
 }
 
+.pie-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+.pie-chart-row { display: flex; align-items: center; gap: 16px; }
+.pie-chart-row svg { flex-shrink: 0; }
+.pie-legend { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.pie-legend-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.pie-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.pie-legend-name { flex: 1; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pie-legend-pct { font-weight: 700; color: var(--slate-text); flex-shrink: 0; }
+
+.backup-reminder {
+  background: var(--indigo-tint);
+  border: 1px solid #C7D2FE;
+  border-left: 4px solid var(--indigo-accent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--navy);
+}
+.backup-reminder .btn { flex-shrink: 0; padding: 8px 12px; font-size: 12px; }
+
 .yearly-summary {
   background: white;
   border: 1px solid var(--border);

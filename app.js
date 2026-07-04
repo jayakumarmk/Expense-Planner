@@ -153,6 +153,7 @@ function blankData() {
     recurringTemplates: [],
     plannedExpenses: [],
     skippedRecurring: {},
+    lastBackupAt: null,
   };
 }
 
@@ -193,6 +194,7 @@ function loadData() {
     }
     if (!parsed.incomeSourceCountry || typeof parsed.incomeSourceCountry !== "object") parsed.incomeSourceCountry = {};
     if (!parsed.incomeByMonth || typeof parsed.incomeByMonth !== "object") parsed.incomeByMonth = {};
+    if (parsed.lastBackupAt === undefined) parsed.lastBackupAt = null;
     return parsed;
   } catch {
     const blank = blankData();
@@ -283,6 +285,82 @@ function renderCountryBreakdown() {
   }).join("");
 }
 
+function daysSince(dateStr) {
+  if (!dateStr) return Infinity;
+  return Math.floor((new Date() - new Date(dateStr)) / (1000 * 60 * 60 * 24));
+}
+
+function renderBackupReminder() {
+  const el = document.getElementById("backupReminder");
+  const days = daysSince(state.lastBackupAt);
+  if (days < 30) {
+    el.innerHTML = "";
+    return;
+  }
+  const msg = state.lastBackupAt
+    ? `It's been ${days} days since your last backup.`
+    : "You haven't backed up your data yet.";
+  el.innerHTML = `
+    <div class="backup-reminder">
+      <span>${msg} Keep your data safe with a quick export.</span>
+      <button type="button" class="btn btn-indigo" id="backupReminderBtn">Export Now</button>
+    </div>
+  `;
+  document.getElementById("backupReminderBtn").addEventListener("click", exportJSON);
+}
+
+function renderCategoryPie() {
+  const totals = categoryTotalsForMonth(currentMonth);
+  const rows = state.categories
+    .map((c) => ({ c, aud: toAUD(totals[c] || 0, getCategoryCurrency(c), currentMonth) }))
+    .filter((r) => r.aud > 0.004)
+    .sort((a, b) => b.aud - a.aud);
+
+  const el = document.getElementById("categoryPie");
+  if (rows.length === 0) {
+    el.innerHTML = `<div class="empty-state">No spending logged yet this month.</div>`;
+    return;
+  }
+
+  const total = rows.reduce((s, r) => s + r.aud, 0);
+  const cx = 60, cy = 60, r = 55;
+  let svgSlices;
+
+  if (rows.length === 1) {
+    svgSlices = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${categoryColor(rows[0].c)}"></circle>`;
+  } else {
+    let angle = -90;
+    svgSlices = rows.map(({ c, aud }) => {
+      const fraction = aud / total;
+      const startAngle = angle;
+      angle += fraction * 360;
+      const endAngle = angle;
+      const large = endAngle - startAngle > 180 ? 1 : 0;
+      const x1 = cx + r * Math.cos((Math.PI * startAngle) / 180);
+      const y1 = cy + r * Math.sin((Math.PI * startAngle) / 180);
+      const x2 = cx + r * Math.cos((Math.PI * endAngle) / 180);
+      const y2 = cy + r * Math.sin((Math.PI * endAngle) / 180);
+      const path = `M ${cx},${cy} L ${x1},${y1} A ${r},${r} 0 ${large},1 ${x2},${y2} Z`;
+      return `<path d="${path}" fill="${categoryColor(c)}" stroke="white" stroke-width="1"></path>`;
+    }).join("");
+  }
+
+  const legend = rows.map(({ c, aud }) => `
+    <div class="pie-legend-row">
+      <span class="pie-legend-dot" style="background:${categoryColor(c)}"></span>
+      <span class="pie-legend-name">${escapeHtml(c)}</span>
+      <span class="pie-legend-pct">${((aud / total) * 100).toFixed(1)}%</span>
+    </div>
+  `).join("");
+
+  el.innerHTML = `
+    <div class="pie-chart-row">
+      <svg viewBox="0 0 120 120" width="120" height="120">${svgSlices}</svg>
+      <div class="pie-legend">${legend}</div>
+    </div>
+  `;
+}
+
 // Auto-creates this month's occurrence of each recurring transaction the
 // first time the month is viewed, tagged with recurringId so it's never
 // duplicated on subsequent views.
@@ -316,6 +394,7 @@ function render() {
   renderDashboard();
   renderCountryBreakdown();
   renderBillsDue();
+  renderBackupReminder();
   renderYearlySummary();
   renderTransactions();
   renderBudgetSettings();
@@ -327,6 +406,7 @@ function render() {
   renderPlannedList();
   renderSavingsGoal();
   renderTrendChart();
+  renderCategoryPie();
 }
 
 // Pending items awaiting your confirmation: recurring templates marked
@@ -924,7 +1004,10 @@ function exportCSV() {
 }
 
 function exportJSON() {
+  state.lastBackupAt = new Date().toISOString();
+  saveData();
   downloadFile(`expense-planner-backup-${todayStr()}.json`, JSON.stringify(state, null, 2), "application/json");
+  renderBackupReminder();
 }
 
 function importJSON(file) {
@@ -972,6 +1055,7 @@ function importJSON(file) {
       recurringTemplates: Array.isArray(parsed.recurringTemplates) ? parsed.recurringTemplates : [],
       plannedExpenses: Array.isArray(parsed.plannedExpenses) ? parsed.plannedExpenses : [],
       skippedRecurring: parsed.skippedRecurring && typeof parsed.skippedRecurring === "object" ? parsed.skippedRecurring : {},
+      lastBackupAt: parsed.lastBackupAt || null,
     };
     saveData();
     currentMonth = null;
