@@ -59,6 +59,32 @@ function fromAUD(amountAUD, toCurrency, month) {
   return amountAUD * rate;
 }
 
+const DEFAULT_INCOME_SOURCES = ["Primary Income"];
+
+function getIncomeSourceCountry(name) {
+  return (state.incomeSourceCountry && state.incomeSourceCountry[name]) || "Australia";
+}
+
+function getIncomeSourceCurrency(name) {
+  return COUNTRY_CURRENCY[getIncomeSourceCountry(name)] || "AUD";
+}
+
+// Returns this month's income-by-source object, auto-carrying forward from
+// the most recent prior month the first time a new month is viewed.
+function getIncomeForMonth(month) {
+  if (state.incomeByMonth[month]) return state.incomeByMonth[month];
+  const priorMonths = Object.keys(state.incomeByMonth).filter((m) => m < month).sort();
+  const source = priorMonths.length ? state.incomeByMonth[priorMonths[priorMonths.length - 1]] : zeroBudgets(state.incomeSources);
+  state.incomeByMonth[month] = { ...source };
+  saveData();
+  return state.incomeByMonth[month];
+}
+
+function getTotalIncomeAUD(month) {
+  const income = getIncomeForMonth(month);
+  return state.incomeSources.reduce((s, name) => s + toAUD(income[name] || 0, getIncomeSourceCurrency(name), month), 0);
+}
+
 const CATEGORY_COLORS = [
   "#2563EB", "#D97706", "#16A34A", "#0D9488", "#4F46E5", "#DB2777",
   "#7C3AED", "#0891B2", "#CA8A04", "#DC2626", "#059669", "#EA580C", "#4338CA",
@@ -114,10 +140,12 @@ function blankData() {
   const pad = (n) => String(n).padStart(2, "0");
   const thisMonth = `${y}-${pad(m + 1)}`;
   return {
-    income: 0,
     savingsGoal: 0,
     categories: [...DEFAULT_CATEGORIES],
     categoryCountry: {},
+    incomeSources: [...DEFAULT_INCOME_SOURCES],
+    incomeSourceCountry: {},
+    incomeByMonth: { [thisMonth]: zeroBudgets(DEFAULT_INCOME_SOURCES) },
     displayCurrency: "AUD",
     exchangeRatesByMonth: { [thisMonth]: DEFAULT_EXCHANGE_RATE },
     budgetsByMonth: { [thisMonth]: zeroBudgets(DEFAULT_CATEGORIES) },
@@ -157,6 +185,14 @@ function loadData() {
     if (!parsed.exchangeRatesByMonth || typeof parsed.exchangeRatesByMonth !== "object") parsed.exchangeRatesByMonth = {};
     if (!Array.isArray(parsed.plannedExpenses)) parsed.plannedExpenses = [];
     if (!parsed.skippedRecurring || typeof parsed.skippedRecurring !== "object") parsed.skippedRecurring = {};
+    if (!Array.isArray(parsed.incomeSources) || !parsed.incomeSources.length) {
+      const earliestMonth = Object.keys(parsed.budgetsByMonth || {}).sort()[0] || monthKey(todayStr());
+      parsed.incomeSources = [...DEFAULT_INCOME_SOURCES];
+      parsed.incomeSourceCountry = {};
+      parsed.incomeByMonth = { [earliestMonth]: { [DEFAULT_INCOME_SOURCES[0]]: Number(parsed.income) || 0 } };
+    }
+    if (!parsed.incomeSourceCountry || typeof parsed.incomeSourceCountry !== "object") parsed.incomeSourceCountry = {};
+    if (!parsed.incomeByMonth || typeof parsed.incomeByMonth !== "object") parsed.incomeByMonth = {};
     return parsed;
   } catch {
     const blank = blankData();
@@ -284,6 +320,8 @@ function render() {
   renderTransactions();
   renderBudgetSettings();
   renderCurrencySettings();
+  renderIncomeManager();
+  renderIncomeAmounts();
   renderCategoryManager();
   renderRecurringList();
   renderPlannedList();
@@ -385,7 +423,7 @@ function renderDashboard() {
   remEl.textContent = fmt(remaining, displayCur);
   remEl.style.color = remaining < 0 ? "var(--red-accent)" : "var(--navy)";
 
-  const savedAUD = state.income - totalActualAUD;
+  const savedAUD = getTotalIncomeAUD(currentMonth) - totalActualAUD;
   const saved = fromAUD(savedAUD, displayCur, currentMonth);
   const savedEl = document.getElementById("kpiSaved");
   savedEl.textContent = fmt(saved, displayCur);
@@ -478,14 +516,96 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-function renderBudgetSettings() {
-  document.getElementById("incomeInput").value = round2(state.income);
-  document.getElementById("incomeInput").oninput = (e) => {
-    state.income = Number(e.target.value) || 0;
-    saveData();
-    updateGoalProgress();
-  };
+function incomeSourceColor(name) {
+  const i = state.incomeSources.indexOf(name);
+  return CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+}
 
+function renderIncomeManager() {
+  document.getElementById("incomeSourceManageList").innerHTML = state.incomeSources.map((name) => `
+    <div class="category-manage-item" style="--cat-color:${incomeSourceColor(name)}">
+      <input type="text" data-original="${escapeHtml(name)}" value="${escapeHtml(name)}" />
+      <select class="cat-country" data-income-country="${escapeHtml(name)}">
+        ${COUNTRIES.map((co) => `<option value="${co}" ${getIncomeSourceCountry(name) === co ? "selected" : ""}>${co}</option>`).join("")}
+      </select>
+      <button type="button" class="cat-delete" data-del-income="${escapeHtml(name)}">&times;</button>
+    </div>
+  `).join("");
+
+  document.querySelectorAll("#incomeSourceManageList input").forEach((input) => {
+    input.addEventListener("change", () => renameIncomeSource(input.dataset.original, input.value.trim()));
+  });
+  document.querySelectorAll("#incomeSourceManageList .cat-country").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      state.incomeSourceCountry[sel.dataset.incomeCountry] = sel.value;
+      saveData();
+      render();
+    });
+  });
+  document.querySelectorAll("#incomeSourceManageList .cat-delete").forEach((btn) => {
+    btn.addEventListener("click", () => deleteIncomeSource(btn.dataset.delIncome));
+  });
+}
+
+function renderIncomeAmounts() {
+  const income = getIncomeForMonth(currentMonth);
+  const nextMonth = addMonths(currentMonth, 1);
+  document.getElementById("copyIncomeBtn").textContent = `Copy to ${monthLabel(nextMonth)} →`;
+
+  document.getElementById("incomeList").innerHTML = state.incomeSources.map((name) => `
+    <div class="budget-item" style="--cat-color:${incomeSourceColor(name)}">
+      <span class="cat-name">${escapeHtml(name)}<span class="cat-currency">${getIncomeSourceCurrency(name)}</span></span>
+      <input type="number" inputmode="decimal" step="0.01" data-income-amount="${escapeHtml(name)}" value="${round2(income[name] || 0)}" />
+    </div>
+  `).join("");
+
+  document.querySelectorAll('#incomeList input').forEach((input) => {
+    input.oninput = () => {
+      income[input.dataset.incomeAmount] = Number(input.value) || 0;
+      saveData();
+      renderDashboard();
+      updateGoalProgress();
+    };
+  });
+}
+
+function renameIncomeSource(oldName, newName) {
+  if (!newName || newName === oldName) {
+    renderIncomeManager();
+    return;
+  }
+  if (state.incomeSources.some((n) => n.toLowerCase() === newName.toLowerCase() && n !== oldName)) {
+    alert(`"${newName}" already exists.`);
+    renderIncomeManager();
+    return;
+  }
+  state.incomeSources = state.incomeSources.map((n) => (n === oldName ? newName : n));
+  Object.values(state.incomeByMonth).forEach((monthIncome) => {
+    if (oldName in monthIncome) {
+      monthIncome[newName] = monthIncome[oldName];
+      delete monthIncome[oldName];
+    }
+  });
+  if (oldName in state.incomeSourceCountry) {
+    state.incomeSourceCountry[newName] = state.incomeSourceCountry[oldName];
+    delete state.incomeSourceCountry[oldName];
+  }
+  saveData();
+  render();
+}
+
+function deleteIncomeSource(name) {
+  if (!confirm(`Delete income source "${name}"? This can't be undone.`)) return;
+  state.incomeSources = state.incomeSources.filter((n) => n !== name);
+  Object.values(state.incomeByMonth).forEach((monthIncome) => {
+    delete monthIncome[name];
+  });
+  delete state.incomeSourceCountry[name];
+  saveData();
+  render();
+}
+
+function renderBudgetSettings() {
   const budgets = getBudgetsForMonth(currentMonth);
   const nextMonth = addMonths(currentMonth, 1);
   document.getElementById("copyNextBtn").textContent = `Copy to ${monthLabel(nextMonth)} →`;
@@ -560,7 +680,7 @@ function renderCategoryManager() {
 function updateGoalProgress() {
   const totals = categoryTotalsForMonth(currentMonth);
   const totalActualAUD = state.categories.reduce((s, c) => s + toAUD(totals[c] || 0, getCategoryCurrency(c), currentMonth), 0);
-  const netSavingsAUD = state.income - totalActualAUD;
+  const netSavingsAUD = getTotalIncomeAUD(currentMonth) - totalActualAUD;
   const displayCur = state.displayCurrency || "AUD";
   const netSavings = fromAUD(netSavingsAUD, displayCur, currentMonth);
   const goal = fromAUD(state.savingsGoal || 0, displayCur, currentMonth);
@@ -827,11 +947,24 @@ function importJSON(file) {
       `Import this backup? It has ${txCount} transaction${txCount === 1 ? "" : "s"} and budgets for ${monthCount} month${monthCount === 1 ? "" : "s"}.\n\nThis replaces all current data on this device.`
     );
     if (!ok) return;
+    let incomeSources, incomeSourceCountry, incomeByMonth;
+    if (Array.isArray(parsed.incomeSources) && parsed.incomeSources.length) {
+      incomeSources = parsed.incomeSources;
+      incomeSourceCountry = parsed.incomeSourceCountry && typeof parsed.incomeSourceCountry === "object" ? parsed.incomeSourceCountry : {};
+      incomeByMonth = parsed.incomeByMonth && typeof parsed.incomeByMonth === "object" ? parsed.incomeByMonth : {};
+    } else {
+      const earliestMonth = Object.keys(parsed.budgetsByMonth || {}).sort()[0] || monthKey(todayStr());
+      incomeSources = [...DEFAULT_INCOME_SOURCES];
+      incomeSourceCountry = {};
+      incomeByMonth = { [earliestMonth]: { [DEFAULT_INCOME_SOURCES[0]]: Number(parsed.income) || 0 } };
+    }
     state = {
-      income: Number(parsed.income) || 0,
       savingsGoal: Number(parsed.savingsGoal) || 0,
       categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : deriveCategoriesFromData(parsed),
       categoryCountry: parsed.categoryCountry && typeof parsed.categoryCountry === "object" ? parsed.categoryCountry : {},
+      incomeSources,
+      incomeSourceCountry,
+      incomeByMonth,
       displayCurrency: parsed.displayCurrency || "AUD",
       exchangeRatesByMonth: parsed.exchangeRatesByMonth && typeof parsed.exchangeRatesByMonth === "object" ? parsed.exchangeRatesByMonth : {},
       budgetsByMonth: parsed.budgetsByMonth,
@@ -1022,6 +1155,31 @@ document.getElementById("addCategoryBtn").addEventListener("click", () => {
   });
   input.value = "";
   saveData();
+  render();
+});
+
+document.getElementById("addIncomeSourceBtn").addEventListener("click", () => {
+  const input = document.getElementById("newIncomeSourceInput");
+  const name = input.value.trim();
+  if (!name) return;
+  if (state.incomeSources.some((n) => n.toLowerCase() === name.toLowerCase())) {
+    alert(`"${name}" already exists.`);
+    return;
+  }
+  state.incomeSources.push(name);
+  Object.keys(state.incomeByMonth).forEach((m) => {
+    state.incomeByMonth[m][name] = 0;
+  });
+  input.value = "";
+  saveData();
+  render();
+});
+
+document.getElementById("copyIncomeBtn").addEventListener("click", () => {
+  const nextMonth = addMonths(currentMonth, 1);
+  state.incomeByMonth[nextMonth] = { ...getIncomeForMonth(currentMonth) };
+  saveData();
+  alert(`Income copied to ${monthLabel(nextMonth)}.`);
   render();
 });
 

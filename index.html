@@ -77,11 +77,18 @@
     </section>
 
     <section id="view-budget" class="view">
-      <h2 class="section-title" style="--accent-color:var(--teal-accent)">Monthly Income</h2>
-      <div class="settings-row">
-        <label for="incomeInput">Income (AUD)</label>
-        <input type="number" id="incomeInput" inputmode="decimal" placeholder="0" />
+      <h2 class="section-title" style="--accent-color:var(--teal-accent)">Income Sources</h2>
+      <div id="incomeSourceManageList" class="category-manage-list"></div>
+      <div class="add-category-row">
+        <input type="text" id="newIncomeSourceInput" placeholder="New income source name" />
+        <button type="button" id="addIncomeSourceBtn" class="btn btn-teal">Add</button>
       </div>
+
+      <div class="section-title-row">
+        <h2 class="section-title" style="--accent-color:var(--teal-accent)">Income Amounts</h2>
+        <button type="button" id="copyIncomeBtn" class="link-btn">Copy to next month →</button>
+      </div>
+      <div id="incomeList" class="budget-list"></div>
 
       <div class="section-title-row">
         <h2 class="section-title" style="--accent-color:var(--amber-accent)">Currency</h2>
