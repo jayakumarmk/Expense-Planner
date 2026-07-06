@@ -20,53 +20,60 @@ function deriveCategoriesFromData(data) {
   return Array.from(set);
 }
 
-const COUNTRIES = ["Australia", "India"];
+const DEFAULT_CURRENCIES = [
+  { code: "AUD", symbol: "$" },
+  { code: "INR", symbol: "₹" },
+];
+const DEFAULT_EXCHANGE_RATE = 55; // starting default: units of a new currency per 1 home-currency unit
 
-function getCategoryCountry(c) {
-  return (state.categoryCountry && state.categoryCountry[c]) || "Australia";
+function currencySymbol(code) {
+  const c = (state.currencies || []).find((x) => x.code === code);
+  return c ? c.symbol : code;
 }
-
-const COUNTRY_CURRENCY = { Australia: "AUD", India: "INR" };
-const CURRENCY_SYMBOL = { AUD: "$", INR: "₹" };
-const DEFAULT_EXCHANGE_RATE = 55; // starting default for 1 AUD in INR
 
 function getCategoryCurrency(c) {
-  return COUNTRY_CURRENCY[getCategoryCountry(c)] || "AUD";
+  return (state.categoryCurrency && state.categoryCurrency[c]) || state.homeCurrency;
 }
 
-// Returns this month's AUD->INR rate, auto-carrying forward from the most
-// recent prior month the same way budgets do.
-function getExchangeRateForMonth(month) {
-  if (state.exchangeRatesByMonth[month]) return state.exchangeRatesByMonth[month];
+// Returns this month's home->currency rate, auto-carrying forward from the
+// most recent prior month (per currency) the same way budgets do.
+function getExchangeRateForMonth(month, currency) {
+  if (currency === state.homeCurrency) return 1;
+  if (state.exchangeRatesByMonth[month] && state.exchangeRatesByMonth[month][currency] != null) {
+    return state.exchangeRatesByMonth[month][currency];
+  }
   const priorMonths = Object.keys(state.exchangeRatesByMonth).filter((m) => m < month).sort();
-  const rate = priorMonths.length
-    ? state.exchangeRatesByMonth[priorMonths[priorMonths.length - 1]]
-    : DEFAULT_EXCHANGE_RATE;
-  state.exchangeRatesByMonth[month] = rate;
+  for (let i = priorMonths.length - 1; i >= 0; i--) {
+    const pm = state.exchangeRatesByMonth[priorMonths[i]];
+    if (pm && pm[currency] != null) {
+      if (!state.exchangeRatesByMonth[month]) state.exchangeRatesByMonth[month] = {};
+      state.exchangeRatesByMonth[month][currency] = pm[currency];
+      saveData();
+      return pm[currency];
+    }
+  }
+  if (!state.exchangeRatesByMonth[month]) state.exchangeRatesByMonth[month] = {};
+  state.exchangeRatesByMonth[month][currency] = DEFAULT_EXCHANGE_RATE;
   saveData();
-  return rate;
+  return DEFAULT_EXCHANGE_RATE;
 }
 
 function toAUD(amount, currency, month) {
-  if (currency === "AUD") return amount;
-  const rate = getExchangeRateForMonth(month) || DEFAULT_EXCHANGE_RATE;
+  if (currency === state.homeCurrency) return amount;
+  const rate = getExchangeRateForMonth(month, currency) || DEFAULT_EXCHANGE_RATE;
   return amount / rate;
 }
 
 function fromAUD(amountAUD, toCurrency, month) {
-  if (toCurrency === "AUD") return amountAUD;
-  const rate = getExchangeRateForMonth(month) || DEFAULT_EXCHANGE_RATE;
+  if (toCurrency === state.homeCurrency) return amountAUD;
+  const rate = getExchangeRateForMonth(month, toCurrency) || DEFAULT_EXCHANGE_RATE;
   return amountAUD * rate;
 }
 
 const DEFAULT_INCOME_SOURCES = ["Primary Income"];
 
-function getIncomeSourceCountry(name) {
-  return (state.incomeSourceCountry && state.incomeSourceCountry[name]) || "Australia";
-}
-
 function getIncomeSourceCurrency(name) {
-  return COUNTRY_CURRENCY[getIncomeSourceCountry(name)] || "AUD";
+  return (state.incomeSourceCurrency && state.incomeSourceCurrency[name]) || state.homeCurrency;
 }
 
 // Returns this month's income-by-source object, auto-carrying forward from
@@ -142,12 +149,14 @@ function blankData() {
   return {
     savingsGoal: 0,
     categories: [...DEFAULT_CATEGORIES],
-    categoryCountry: {},
+    categoryCurrency: {},
     incomeSources: [...DEFAULT_INCOME_SOURCES],
-    incomeSourceCountry: {},
+    incomeSourceCurrency: {},
     incomeByMonth: { [thisMonth]: zeroBudgets(DEFAULT_INCOME_SOURCES) },
+    currencies: DEFAULT_CURRENCIES.map((c) => ({ ...c })),
+    homeCurrency: "AUD",
     displayCurrency: "AUD",
-    exchangeRatesByMonth: { [thisMonth]: DEFAULT_EXCHANGE_RATE },
+    exchangeRatesByMonth: { [thisMonth]: {} },
     budgetsByMonth: { [thisMonth]: zeroBudgets(DEFAULT_CATEGORIES) },
     transactions: [],
     recurringTemplates: [],
@@ -167,6 +176,54 @@ let currentView = "dashboard";
 let selectedChip = state.categories[0];
 let txSearchQuery = "";
 
+// Brings an older (or imported) data object up to the current arbitrary-currency
+// schema: migrates the old Australia/India country tags into currency codes,
+// migrates flat per-month exchange-rate numbers into per-currency maps, and
+// fills in defaults for fields that didn't exist yet.
+function migrateCurrencyFields(parsed) {
+  if (!parsed.homeCurrency) parsed.homeCurrency = "AUD";
+  if (!Array.isArray(parsed.currencies) || !parsed.currencies.length) {
+    parsed.currencies = DEFAULT_CURRENCIES.map((c) => ({ ...c }));
+  }
+  if (!parsed.categoryCurrency || typeof parsed.categoryCurrency !== "object") {
+    parsed.categoryCurrency = {};
+    if (parsed.categoryCountry && typeof parsed.categoryCountry === "object") {
+      Object.entries(parsed.categoryCountry).forEach(([cat, country]) => {
+        parsed.categoryCurrency[cat] = country === "India" ? "INR" : "AUD";
+      });
+    }
+  }
+  if (!parsed.incomeSourceCurrency || typeof parsed.incomeSourceCurrency !== "object") {
+    parsed.incomeSourceCurrency = {};
+    if (parsed.incomeSourceCountry && typeof parsed.incomeSourceCountry === "object") {
+      Object.entries(parsed.incomeSourceCountry).forEach(([src, country]) => {
+        parsed.incomeSourceCurrency[src] = country === "India" ? "INR" : "AUD";
+      });
+    }
+  }
+  if (!parsed.displayCurrency) parsed.displayCurrency = "AUD";
+  if (!parsed.exchangeRatesByMonth || typeof parsed.exchangeRatesByMonth !== "object") parsed.exchangeRatesByMonth = {};
+  // migrate old single-number-per-month rates (always meant AUD->INR) into the new per-currency map
+  Object.keys(parsed.exchangeRatesByMonth).forEach((m) => {
+    if (typeof parsed.exchangeRatesByMonth[m] === "number") {
+      parsed.exchangeRatesByMonth[m] = { INR: parsed.exchangeRatesByMonth[m] };
+    }
+  });
+  // make sure every currency actually in use is registered in the currencies list
+  const usedCodes = new Set([
+    parsed.homeCurrency,
+    ...Object.values(parsed.categoryCurrency || {}),
+    ...Object.values(parsed.incomeSourceCurrency || {}),
+  ]);
+  usedCodes.forEach((code) => {
+    if (code && !parsed.currencies.some((c) => c.code === code)) {
+      const known = DEFAULT_CURRENCIES.find((c) => c.code === code);
+      parsed.currencies.push(known ? { ...known } : { code, symbol: code });
+    }
+  });
+  return parsed;
+}
+
 function loadData() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
@@ -181,18 +238,15 @@ function loadData() {
     }
     if (!Array.isArray(parsed.recurringTemplates)) parsed.recurringTemplates = [];
     if (typeof parsed.savingsGoal !== "number") parsed.savingsGoal = 0;
-    if (!parsed.categoryCountry || typeof parsed.categoryCountry !== "object") parsed.categoryCountry = {};
-    if (!parsed.displayCurrency) parsed.displayCurrency = "AUD";
-    if (!parsed.exchangeRatesByMonth || typeof parsed.exchangeRatesByMonth !== "object") parsed.exchangeRatesByMonth = {};
+    migrateCurrencyFields(parsed);
     if (!Array.isArray(parsed.plannedExpenses)) parsed.plannedExpenses = [];
     if (!parsed.skippedRecurring || typeof parsed.skippedRecurring !== "object") parsed.skippedRecurring = {};
     if (!Array.isArray(parsed.incomeSources) || !parsed.incomeSources.length) {
       const earliestMonth = Object.keys(parsed.budgetsByMonth || {}).sort()[0] || monthKey(todayStr());
       parsed.incomeSources = [...DEFAULT_INCOME_SOURCES];
-      parsed.incomeSourceCountry = {};
+      parsed.incomeSourceCurrency = {};
       parsed.incomeByMonth = { [earliestMonth]: { [DEFAULT_INCOME_SOURCES[0]]: Number(parsed.income) || 0 } };
     }
-    if (!parsed.incomeSourceCountry || typeof parsed.incomeSourceCountry !== "object") parsed.incomeSourceCountry = {};
     if (!parsed.incomeByMonth || typeof parsed.incomeByMonth !== "object") parsed.incomeByMonth = {};
     if (parsed.lastBackupAt === undefined) parsed.lastBackupAt = null;
     return parsed;
@@ -208,7 +262,7 @@ function saveData() {
 }
 
 function fmt(n, currency = "AUD") {
-  const symbol = CURRENCY_SYMBOL[currency] || "$";
+  const symbol = currencySymbol(currency);
   const sign = n < 0 ? "-" : "";
   return sign + symbol + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -257,29 +311,36 @@ function categoryTotalsForMonth(month) {
   return totals;
 }
 
-function renderCountryBreakdown() {
+const CURRENCY_COLORS = ["#0D9488", "#D97706", "#4F46E5", "#DC2626", "#0EA5E9", "#059669", "#DB2777"];
+function currencyColor(code) {
+  const idx = (state.currencies || []).findIndex((c) => c.code === code);
+  return CURRENCY_COLORS[idx >= 0 ? idx % CURRENCY_COLORS.length : 0];
+}
+
+function renderCurrencyBreakdown() {
   const totals = categoryTotalsForMonth(currentMonth);
   const budgets = getBudgetsForMonth(currentMonth);
-  const byCountry = {};
-  COUNTRIES.forEach((co) => (byCountry[co] = { actual: 0, budgeted: 0 }));
+  const byCurrency = {};
+  (state.currencies || []).forEach((c) => (byCurrency[c.code] = { actual: 0, budgeted: 0 }));
   state.categories.forEach((c) => {
-    const co = getCategoryCountry(c);
-    if (!byCountry[co]) byCountry[co] = { actual: 0, budgeted: 0 };
-    byCountry[co].actual += totals[c] || 0;
-    byCountry[co].budgeted += budgets[c] || 0;
+    const cur = getCategoryCurrency(c);
+    if (!byCurrency[cur]) byCurrency[cur] = { actual: 0, budgeted: 0 };
+    byCurrency[cur].actual += totals[c] || 0;
+    byCurrency[cur].budgeted += budgets[c] || 0;
   });
 
-  const countryColors = { Australia: "#0D9488", India: "#D97706" };
-  document.getElementById("countryBreakdown").innerHTML = COUNTRIES.map((co) => {
-    const cur = COUNTRY_CURRENCY[co] || "AUD";
-    const audLine = cur !== "AUD"
-      ? `<div class="country-spent">${fmt(toAUD(byCountry[co].actual, cur, currentMonth), "AUD")} <span class="country-budget-inline">(${fmt(toAUD(byCountry[co].budgeted, cur, currentMonth), "AUD")})</span></div>`
+  const usedCodes = new Set([...Object.values(state.categoryCurrency || {}), ...Object.values(state.incomeSourceCurrency || {})]);
+  const codes = Object.keys(byCurrency).filter((code) => code === state.homeCurrency || usedCodes.has(code));
+
+  document.getElementById("countryBreakdown").innerHTML = codes.map((cur) => {
+    const homeLine = cur !== state.homeCurrency
+      ? `<div class="country-spent">${fmt(toAUD(byCurrency[cur].actual, cur, currentMonth), state.homeCurrency)} <span class="country-budget-inline">(${fmt(toAUD(byCurrency[cur].budgeted, cur, currentMonth), state.homeCurrency)})</span></div>`
       : "";
     return `
-    <div class="country-card" style="--country-color:${countryColors[co] || "#0D9488"}">
-      <div class="country-name">${co}</div>
-      <div class="country-spent">${fmt(byCountry[co].actual, cur)} <span class="country-budget-inline">(${fmt(byCountry[co].budgeted, cur)})</span></div>
-      ${audLine}
+    <div class="country-card" style="--country-color:${currencyColor(cur)}">
+      <div class="country-name">${cur}</div>
+      <div class="country-spent">${fmt(byCurrency[cur].actual, cur)} <span class="country-budget-inline">(${fmt(byCurrency[cur].budgeted, cur)})</span></div>
+      ${homeLine}
     </div>
   `;
   }).join("");
@@ -392,7 +453,7 @@ function render() {
   populateMonthSelector();
   ensureRecurringForMonth(currentMonth);
   renderDashboard();
-  renderCountryBreakdown();
+  renderCurrencyBreakdown();
   renderBillsDue();
   renderBackupReminder();
   renderYearlySummary();
@@ -605,8 +666,8 @@ function renderIncomeManager() {
   document.getElementById("incomeSourceManageList").innerHTML = state.incomeSources.map((name) => `
     <div class="category-manage-item" style="--cat-color:${incomeSourceColor(name)}">
       <input type="text" data-original="${escapeHtml(name)}" value="${escapeHtml(name)}" />
-      <select class="cat-country" data-income-country="${escapeHtml(name)}">
-        ${COUNTRIES.map((co) => `<option value="${co}" ${getIncomeSourceCountry(name) === co ? "selected" : ""}>${co}</option>`).join("")}
+      <select class="cat-country" data-income-currency="${escapeHtml(name)}">
+        ${state.currencies.map((cur) => `<option value="${cur.code}" ${getIncomeSourceCurrency(name) === cur.code ? "selected" : ""}>${cur.code}</option>`).join("")}
       </select>
       <button type="button" class="cat-delete" data-del-income="${escapeHtml(name)}">&times;</button>
     </div>
@@ -617,7 +678,7 @@ function renderIncomeManager() {
   });
   document.querySelectorAll("#incomeSourceManageList .cat-country").forEach((sel) => {
     sel.addEventListener("change", () => {
-      state.incomeSourceCountry[sel.dataset.incomeCountry] = sel.value;
+      state.incomeSourceCurrency[sel.dataset.incomeCurrency] = sel.value;
       saveData();
       render();
     });
@@ -666,9 +727,9 @@ function renameIncomeSource(oldName, newName) {
       delete monthIncome[oldName];
     }
   });
-  if (oldName in state.incomeSourceCountry) {
-    state.incomeSourceCountry[newName] = state.incomeSourceCountry[oldName];
-    delete state.incomeSourceCountry[oldName];
+  if (oldName in state.incomeSourceCurrency) {
+    state.incomeSourceCurrency[newName] = state.incomeSourceCurrency[oldName];
+    delete state.incomeSourceCurrency[oldName];
   }
   saveData();
   render();
@@ -680,7 +741,7 @@ function deleteIncomeSource(name) {
   Object.values(state.incomeByMonth).forEach((monthIncome) => {
     delete monthIncome[name];
   });
-  delete state.incomeSourceCountry[name];
+  delete state.incomeSourceCurrency[name];
   saveData();
   render();
 }
@@ -702,28 +763,44 @@ function renderBudgetSettings() {
       budgets[input.dataset.budgetCat] = Number(input.value) || 0;
       saveData();
       renderDashboard();
-      renderCountryBreakdown();
+      renderCurrencyBreakdown();
     };
   });
 }
 
 function renderCurrencySettings() {
-  const rateInput = document.getElementById("exchangeRateInput");
-  rateInput.value = getExchangeRateForMonth(currentMonth);
-  rateInput.oninput = () => {
-    state.exchangeRatesByMonth[currentMonth] = Number(rateInput.value) || 0;
-    saveData();
-    renderDashboard();
-    renderCountryBreakdown();
-    updateGoalProgress();
-    renderTrendChart();
-  };
+  const otherCurrencies = state.currencies.filter((c) => c.code !== state.homeCurrency);
+
+  document.getElementById("currencyRateList").innerHTML = otherCurrencies.map((c) => `
+    <div class="category-manage-item" style="--cat-color:${currencyColor(c.code)}">
+      <span class="cat-name">1 ${state.homeCurrency} = ${escapeHtml(c.symbol)}</span>
+      <input type="number" inputmode="decimal" step="0.01" data-rate-currency="${c.code}" value="${getExchangeRateForMonth(currentMonth, c.code)}" />
+      <button type="button" class="cat-delete" data-del-currency="${c.code}">&times;</button>
+    </div>
+  `).join("");
+
+  document.querySelectorAll("#currencyRateList input").forEach((input) => {
+    input.oninput = () => {
+      if (!state.exchangeRatesByMonth[currentMonth]) state.exchangeRatesByMonth[currentMonth] = {};
+      state.exchangeRatesByMonth[currentMonth][input.dataset.rateCurrency] = Number(input.value) || 0;
+      saveData();
+      renderDashboard();
+      renderCurrencyBreakdown();
+      updateGoalProgress();
+      renderTrendChart();
+    };
+  });
+
+  document.querySelectorAll("#currencyRateList .cat-delete").forEach((btn) => {
+    btn.addEventListener("click", () => deleteCurrency(btn.dataset.delCurrency));
+  });
 
   const nextMonth = addMonths(currentMonth, 1);
-  document.getElementById("copyRateBtn").textContent = `Copy rate to ${monthLabel(nextMonth)} →`;
+  document.getElementById("copyRateBtn").textContent = `Copy rates to ${monthLabel(nextMonth)} →`;
 
   const currSelect = document.getElementById("displayCurrencySelect");
-  currSelect.value = state.displayCurrency || "AUD";
+  currSelect.innerHTML = state.currencies.map((c) => `<option value="${c.code}">${c.code} (${escapeHtml(c.symbol)})</option>`).join("");
+  currSelect.value = state.displayCurrency || state.homeCurrency;
   currSelect.onchange = () => {
     state.displayCurrency = currSelect.value;
     saveData();
@@ -731,12 +808,42 @@ function renderCurrencySettings() {
   };
 }
 
+function addCurrency(code, symbol) {
+  code = code.trim().toUpperCase();
+  symbol = symbol.trim();
+  if (!code) return;
+  if (state.currencies.some((c) => c.code === code)) {
+    alert(`"${code}" already exists.`);
+    return;
+  }
+  state.currencies.push({ code, symbol: symbol || code });
+  saveData();
+  render();
+}
+
+function deleteCurrency(code) {
+  if (code === state.homeCurrency) return;
+  const inUse = Object.values(state.categoryCurrency).includes(code) || Object.values(state.incomeSourceCurrency).includes(code);
+  if (inUse) {
+    alert(`"${code}" is assigned to a category or income source. Reassign those first.`);
+    return;
+  }
+  if (!confirm(`Delete currency "${code}"? This can't be undone.`)) return;
+  state.currencies = state.currencies.filter((c) => c.code !== code);
+  if (state.displayCurrency === code) state.displayCurrency = state.homeCurrency;
+  Object.keys(state.exchangeRatesByMonth).forEach((m) => {
+    if (state.exchangeRatesByMonth[m]) delete state.exchangeRatesByMonth[m][code];
+  });
+  saveData();
+  render();
+}
+
 function renderCategoryManager() {
   document.getElementById("categoryManageList").innerHTML = state.categories.map((c) => `
     <div class="category-manage-item" style="--cat-color:${categoryColor(c)}">
       <input type="text" data-original="${escapeHtml(c)}" value="${escapeHtml(c)}" />
-      <select class="cat-country" data-country-cat="${escapeHtml(c)}">
-        ${COUNTRIES.map((co) => `<option value="${co}" ${getCategoryCountry(c) === co ? "selected" : ""}>${co}</option>`).join("")}
+      <select class="cat-country" data-currency-cat="${escapeHtml(c)}">
+        ${state.currencies.map((cur) => `<option value="${cur.code}" ${getCategoryCurrency(c) === cur.code ? "selected" : ""}>${cur.code}</option>`).join("")}
       </select>
       <button type="button" class="cat-delete" data-del-cat="${escapeHtml(c)}">&times;</button>
     </div>
@@ -747,7 +854,7 @@ function renderCategoryManager() {
   });
   document.querySelectorAll("#categoryManageList .cat-country").forEach((sel) => {
     sel.addEventListener("change", () => {
-      state.categoryCountry[sel.dataset.countryCat] = sel.value;
+      state.categoryCurrency[sel.dataset.currencyCat] = sel.value;
       saveData();
       render();
     });
@@ -814,7 +921,7 @@ function renderTrendChart() {
     const isCurrent = months[i] === currentMonth;
     const color = isCurrent ? "#2563EB" : "#94A3B8";
     const label = monthLabel(months[i]).split(" ")[0];
-    const symbol = CURRENCY_SYMBOL[displayCur] || "$";
+    const symbol = currencySymbol(displayCur);
     const amountLabel = symbol + (v >= 1000 ? `${Math.round(v / 100) / 10}k` : Math.round(v).toString());
     return `
       <text x="${x + barW / 2}" y="${y - 5}" text-anchor="middle" font-size="9" fill="#334155">${amountLabel}</text>
@@ -955,9 +1062,9 @@ function renameCategory(oldName, newName) {
       delete monthBudgets[oldName];
     }
   });
-  if (oldName in state.categoryCountry) {
-    state.categoryCountry[newName] = state.categoryCountry[oldName];
-    delete state.categoryCountry[oldName];
+  if (oldName in state.categoryCurrency) {
+    state.categoryCurrency[newName] = state.categoryCurrency[oldName];
+    delete state.categoryCurrency[oldName];
   }
   state.transactions.forEach((t) => {
     if (t.category === oldName) t.category = newName;
@@ -977,7 +1084,7 @@ function deleteCategory(name) {
   Object.values(state.budgetsByMonth).forEach((monthBudgets) => {
     delete monthBudgets[name];
   });
-  delete state.categoryCountry[name];
+  delete state.categoryCurrency[name];
   saveData();
   render();
 }
@@ -1030,26 +1137,27 @@ function importJSON(file) {
       `Import this backup? It has ${txCount} transaction${txCount === 1 ? "" : "s"} and budgets for ${monthCount} month${monthCount === 1 ? "" : "s"}.\n\nThis replaces all current data on this device.`
     );
     if (!ok) return;
-    let incomeSources, incomeSourceCountry, incomeByMonth;
+    let incomeSources, incomeByMonth;
     if (Array.isArray(parsed.incomeSources) && parsed.incomeSources.length) {
       incomeSources = parsed.incomeSources;
-      incomeSourceCountry = parsed.incomeSourceCountry && typeof parsed.incomeSourceCountry === "object" ? parsed.incomeSourceCountry : {};
       incomeByMonth = parsed.incomeByMonth && typeof parsed.incomeByMonth === "object" ? parsed.incomeByMonth : {};
     } else {
       const earliestMonth = Object.keys(parsed.budgetsByMonth || {}).sort()[0] || monthKey(todayStr());
       incomeSources = [...DEFAULT_INCOME_SOURCES];
-      incomeSourceCountry = {};
       incomeByMonth = { [earliestMonth]: { [DEFAULT_INCOME_SOURCES[0]]: Number(parsed.income) || 0 } };
     }
+    migrateCurrencyFields(parsed);
     state = {
       savingsGoal: Number(parsed.savingsGoal) || 0,
       categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : deriveCategoriesFromData(parsed),
-      categoryCountry: parsed.categoryCountry && typeof parsed.categoryCountry === "object" ? parsed.categoryCountry : {},
+      categoryCurrency: parsed.categoryCurrency,
       incomeSources,
-      incomeSourceCountry,
+      incomeSourceCurrency: parsed.incomeSourceCurrency,
       incomeByMonth,
-      displayCurrency: parsed.displayCurrency || "AUD",
-      exchangeRatesByMonth: parsed.exchangeRatesByMonth && typeof parsed.exchangeRatesByMonth === "object" ? parsed.exchangeRatesByMonth : {},
+      currencies: parsed.currencies,
+      homeCurrency: parsed.homeCurrency,
+      displayCurrency: parsed.displayCurrency,
+      exchangeRatesByMonth: parsed.exchangeRatesByMonth,
       budgetsByMonth: parsed.budgetsByMonth,
       transactions: parsed.transactions,
       recurringTemplates: Array.isArray(parsed.recurringTemplates) ? parsed.recurringTemplates : [],
@@ -1207,10 +1315,23 @@ document.getElementById("copyNextBtn").addEventListener("click", () => {
 
 document.getElementById("copyRateBtn").addEventListener("click", () => {
   const nextMonth = addMonths(currentMonth, 1);
-  state.exchangeRatesByMonth[nextMonth] = getExchangeRateForMonth(currentMonth);
+  const rates = {};
+  state.currencies.forEach((c) => {
+    if (c.code === state.homeCurrency) return;
+    rates[c.code] = getExchangeRateForMonth(currentMonth, c.code);
+  });
+  state.exchangeRatesByMonth[nextMonth] = rates;
   saveData();
-  alert(`Exchange rate copied to ${monthLabel(nextMonth)}.`);
+  alert(`Exchange rates copied to ${monthLabel(nextMonth)}.`);
   render();
+});
+
+document.getElementById("addCurrencyBtn").addEventListener("click", () => {
+  const codeInput = document.getElementById("newCurrencyCodeInput");
+  const symbolInput = document.getElementById("newCurrencySymbolInput");
+  addCurrency(codeInput.value, symbolInput.value);
+  codeInput.value = "";
+  symbolInput.value = "";
 });
 
 document.getElementById("exportCsvBtn").addEventListener("click", exportCSV);

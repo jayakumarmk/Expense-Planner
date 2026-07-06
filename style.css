@@ -323,7 +323,7 @@ body {
   margin: 0 0 20px;
 }
 
-.category-list, .budget-list { display: flex; flex-direction: column; gap: 10px; }
+.category-list, .budget-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
 
 .category-item {
   background: white;
@@ -515,6 +515,7 @@ body {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border);
+  border-left: 4px solid var(--row-accent, var(--indigo-accent));
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 14px;

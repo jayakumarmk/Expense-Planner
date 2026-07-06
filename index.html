@@ -44,7 +44,7 @@
       <div id="billsDueSection"></div>
       <div id="backupReminder"></div>
 
-      <h2 class="section-title" style="--accent-color:var(--teal-accent)">Australia / India Breakdown</h2>
+      <h2 class="section-title" style="--accent-color:var(--teal-accent)">Currency Breakdown</h2>
       <div id="countryBreakdown" class="country-breakdown"></div>
 
       <div class="section-title-row">
@@ -83,7 +83,7 @@
     <section id="view-budget" class="view">
       <h2 class="section-title" style="--accent-color:var(--teal-accent)">Income Sources</h2>
       <div id="incomeSourceManageList" class="category-manage-list"></div>
-      <div class="add-category-row">
+      <div class="add-category-row" style="--row-accent:var(--teal-accent)">
         <input type="text" id="newIncomeSourceInput" placeholder="New income source name" />
         <button type="button" id="addIncomeSourceBtn" class="btn btn-teal">Add</button>
       </div>
@@ -96,23 +96,22 @@
 
       <div class="section-title-row">
         <h2 class="section-title" style="--accent-color:var(--amber-accent)">Currency</h2>
-        <button type="button" id="copyRateBtn" class="link-btn">Copy rate to next month →</button>
+        <button type="button" id="copyRateBtn" class="link-btn">Copy rates to next month →</button>
       </div>
-      <div class="settings-row">
-        <label for="exchangeRateInput">1 AUD = ₹</label>
-        <input type="number" id="exchangeRateInput" inputmode="decimal" step="0.01" placeholder="0" />
+      <div id="currencyRateList" class="category-manage-list"></div>
+      <div class="add-category-row" style="--row-accent:var(--amber-accent)">
+        <input type="text" id="newCurrencyCodeInput" placeholder="Code (e.g. USD)" maxlength="6" />
+        <input type="text" id="newCurrencySymbolInput" placeholder="Symbol (e.g. $)" maxlength="4" />
+        <button type="button" id="addCurrencyBtn" class="btn btn-amber">Add</button>
       </div>
       <div class="settings-row">
         <label for="displayCurrencySelect">Show dashboard totals in</label>
-        <select id="displayCurrencySelect" class="currency-select">
-          <option value="AUD">AUD ($)</option>
-          <option value="INR">INR (₹)</option>
-        </select>
+        <select id="displayCurrencySelect" class="currency-select"></select>
       </div>
 
       <h2 class="section-title" style="--accent-color:var(--indigo-accent)">Categories</h2>
       <div id="categoryManageList" class="category-manage-list"></div>
-      <div class="add-category-row">
+      <div class="add-category-row" style="--row-accent:var(--indigo-accent)">
         <input type="text" id="newCategoryInput" placeholder="New category name" />
         <button type="button" id="addCategoryBtn" class="btn btn-indigo">Add</button>
       </div>
